@@ -1,12 +1,293 @@
-﻿<Window x:Class="LeadManagement.Desktop.MainWindow"
+<Window x:Class="LeadManagement.Desktop.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:LeadManagement.Desktop"
+        xmlns:views="clr-namespace:LeadManagement.Desktop.Views"
+        xmlns:viewmodels="clr-namespace:LeadManagement.Desktop.ViewModels"
         mc:Ignorable="d"
-        Title="MainWindow" Height="450" Width="800">
-    <Grid>
+        Title="Lead Management System" 
+        Height="800" Width="1240"
+        MinHeight="650" MinWidth="980"
+        WindowStartupLocation="CenterScreen"
+        FontFamily="{StaticResource AppFontFamily}"
+        Background="{StaticResource WindowBgBrush}">
 
+    <Window.DataContext>
+        <viewmodels:MainViewModel />
+    </Window.DataContext>
+
+    <Grid>
+        <!-- 1. LOGIN SCREEN (Active when IsLoggedIn is False) -->
+        <views:LoginView>
+            <views:LoginView.Style>
+                <Style TargetType="UserControl">
+                    <Setter Property="Visibility" Value="Visible" />
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding IsLoggedIn}" Value="True">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </views:LoginView.Style>
+        </views:LoginView>
+
+        <!-- 2. MAIN APPLICATION SHELL (Active when IsLoggedIn is True) -->
+        <Grid>
+            <Grid.Style>
+                <Style TargetType="Grid">
+                    <Setter Property="Visibility" Value="Collapsed" />
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding IsLoggedIn}" Value="True">
+                            <Setter Property="Visibility" Value="Visible" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Grid.Style>
+
+            <Grid.RowDefinitions>
+                <RowDefinition Height="60" /> <!-- Fixed Top Navigation Bar -->
+                <RowDefinition Height="*" />  <!-- Main Workspace (Sidebar + Content) -->
+            </Grid.RowDefinitions>
+
+            <!-- FIXED TOP NAVIGATION BAR -->
+            <Border Grid.Row="0" Background="{StaticResource TopbarBgBrush}" BorderBrush="#334155" BorderThickness="0,0,0,1" Padding="20,0">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <!-- Application Branding & Title -->
+                    <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                        <Border Background="{StaticResource PrimaryBrush}" CornerRadius="6" Width="34" Height="34" Margin="0,0,12,0">
+                            <TextBlock Text="LMS" Foreground="White" FontWeight="Bold" FontSize="13" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <TextBlock Text="{Binding AppTitle}" FontSize="16" FontWeight="Bold" Foreground="White" VerticalAlignment="Center" />
+                        <Rectangle Width="1" Height="18" Fill="#475569" Margin="14,0" VerticalAlignment="Center" />
+                        <TextBlock Text="Enterprise Edition" FontSize="12" Foreground="#94A3B8" VerticalAlignment="Center" />
+                    </StackPanel>
+
+                    <!-- Right Top Navigation: Status & User Session -->
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                        <!-- Backend Environment Status Pill -->
+                        <Border Background="#064E3B" BorderBrush="#059669" BorderThickness="1" CornerRadius="12" Padding="10,4" Margin="0,0,14,0">
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <TextBlock Text="● " Foreground="#34D399" FontSize="11" VerticalAlignment="Center" />
+                                <TextBlock Text="{Binding BackendStatus}" Foreground="#A7F3D0" FontSize="11" FontWeight="Medium" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Border>
+
+                        <!-- User Profile Chip -->
+                        <Border Background="#334155" CornerRadius="6" Padding="10,6" Margin="0,0,12,0">
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <TextBlock Text="👤 " FontSize="12" VerticalAlignment="Center" />
+                                <TextBlock Text="{Binding ActiveUser}" Foreground="#F8FAFC" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Sign Out Button -->
+                        <Button Content="Sign Out" 
+                                Command="{Binding LogoutCommand}"
+                                Style="{StaticResource SecondaryButtonStyle}"
+                                Foreground="#CBD5E1"
+                                BorderBrush="#475569"
+                                Padding="12,6"
+                                FontSize="12" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <!-- MAIN WORKSPACE: SIDEBAR + CONTENT REGION -->
+            <Grid Grid.Row="1">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="230" /> <!-- Left Navigation Sidebar -->
+                    <ColumnDefinition Width="*" />   <!-- Main Content Area -->
+                </Grid.ColumnDefinitions>
+
+                <!-- LEFT NAVIGATION SIDEBAR (BUTTON STACK) -->
+                <Border Grid.Column="0" Background="{StaticResource SidebarBgBrush}" BorderBrush="#334155" BorderThickness="0,0,1,0">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <!-- Navigation Section Title -->
+                        <TextBlock Grid.Row="0" 
+                                   Text="MAIN NAVIGATION" 
+                                   FontSize="11" 
+                                   FontWeight="SemiBold" 
+                                   Foreground="#64748B" 
+                                   Margin="20,20,20,10" />
+
+                        <!-- Sidebar Button Stack -->
+                        <StackPanel Grid.Row="1">
+                            <!-- 1. Dashboard Button -->
+                            <Button Content="📊  Dashboard" 
+                                    Command="{Binding NavigateCommand}" 
+                                    CommandParameter="Dashboard">
+                                <Button.Style>
+                                    <Style TargetType="Button" BasedOn="{StaticResource SidebarNavButtonStyle}">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding CurrentView}" Value="Dashboard">
+                                                <Setter Property="Tag" Value="Active" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Button.Style>
+                            </Button>
+
+                            <!-- 2. Lead Masterlist Button -->
+                            <Button Content="📋  Lead Masterlist" 
+                                    Command="{Binding NavigateCommand}" 
+                                    CommandParameter="LeadMasterlist">
+                                <Button.Style>
+                                    <Style TargetType="Button" BasedOn="{StaticResource SidebarNavButtonStyle}">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding CurrentView}" Value="LeadMasterlist">
+                                                <Setter Property="Tag" Value="Active" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Button.Style>
+                            </Button>
+
+                            <!-- 3. Import Leads Button -->
+                            <Button Content="📥  Import Leads" 
+                                    Command="{Binding NavigateCommand}" 
+                                    CommandParameter="ImportLeads">
+                                <Button.Style>
+                                    <Style TargetType="Button" BasedOn="{StaticResource SidebarNavButtonStyle}">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding CurrentView}" Value="ImportLeads">
+                                                <Setter Property="Tag" Value="Active" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Button.Style>
+                            </Button>
+
+                            <!-- 4. Import History Button -->
+                            <Button Content="📜  Import History" 
+                                    Command="{Binding NavigateCommand}" 
+                                    CommandParameter="ImportHistory">
+                                <Button.Style>
+                                    <Style TargetType="Button" BasedOn="{StaticResource SidebarNavButtonStyle}">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding CurrentView}" Value="ImportHistory">
+                                                <Setter Property="Tag" Value="Active" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Button.Style>
+                            </Button>
+
+                            <!-- Subtle Divider -->
+                            <Rectangle Height="1" Fill="#1E293B" Margin="14,14" />
+
+                            <!-- 5. Settings Button -->
+                            <Button Content="⚙️  Settings" 
+                                    Command="{Binding NavigateCommand}" 
+                                    CommandParameter="Settings">
+                                <Button.Style>
+                                    <Style TargetType="Button" BasedOn="{StaticResource SidebarNavButtonStyle}">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding CurrentView}" Value="Settings">
+                                                <Setter Property="Tag" Value="Active" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Button.Style>
+                            </Button>
+                        </StackPanel>
+
+                        <!-- Sidebar Footer Info -->
+                        <Border Grid.Row="2" Background="#0A0F1D" Padding="16,14">
+                            <StackPanel>
+                                <TextBlock Text="Lead Management Desktop" FontSize="11" FontWeight="SemiBold" Foreground="#94A3B8" />
+                                <TextBlock Text=".NET 10 • WPF Client" FontSize="10" Foreground="#475569" Margin="0,2,0,0" />
+                            </StackPanel>
+                        </Border>
+                    </Grid>
+                </Border>
+
+                <!-- MAIN CONTENT AREA (DYNAMIC VIEW HOST) -->
+                <Grid Grid.Column="1" Background="{StaticResource WindowBgBrush}">
+                    <!-- 1. Dashboard View -->
+                    <views:DashboardView>
+                        <views:DashboardView.Style>
+                            <Style TargetType="UserControl">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding CurrentView}" Value="Dashboard">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </views:DashboardView.Style>
+                    </views:DashboardView>
+
+                    <!-- 2. Lead Masterlist View -->
+                    <views:LeadMasterlistView>
+                        <views:LeadMasterlistView.Style>
+                            <Style TargetType="UserControl">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding CurrentView}" Value="LeadMasterlist">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </views:LeadMasterlistView.Style>
+                    </views:LeadMasterlistView>
+
+                    <!-- 3. Import Leads View -->
+                    <views:ImportLeadsView>
+                        <views:ImportLeadsView.Style>
+                            <Style TargetType="UserControl">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding CurrentView}" Value="ImportLeads">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </views:ImportLeadsView.Style>
+                    </views:ImportLeadsView>
+
+                    <!-- 4. Import History View -->
+                    <views:ImportHistoryView>
+                        <views:ImportHistoryView.Style>
+                            <Style TargetType="UserControl">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding CurrentView}" Value="ImportHistory">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </views:ImportHistoryView.Style>
+                    </views:ImportHistoryView>
+
+                    <!-- 5. Settings View -->
+                    <views:SettingsView>
+                        <views:SettingsView.Style>
+                            <Style TargetType="UserControl">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding CurrentView}" Value="Settings">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </views:SettingsView.Style>
+                    </views:SettingsView>
+                </Grid>
+            </Grid>
+        </Grid>
     </Grid>
 </Window>
