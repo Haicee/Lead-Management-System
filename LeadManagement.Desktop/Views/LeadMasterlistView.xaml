@@ -158,11 +158,12 @@
                 Style="{StaticResource CardBorderStyle}" 
                 Padding="0" 
                 ClipToBounds="True">
-            <DataGrid ItemsSource="{Binding FilteredLeads}" 
+            <DataGrid ItemsSource="{Binding FilteredLeads}"     
                       SelectedItem="{Binding SelectedLead, Mode=TwoWay}"
                       Style="{StaticResource ModernDataGridStyle}"
+                      GridLinesVisibility="None"
                       VerticalScrollBarVisibility="Auto"
-                      HorizontalScrollBarVisibility="Auto">
+                      HorizontalScrollBarVisibility="Auto" SelectionChanged="DataGrid_SelectionChanged">
                 <DataGrid.Columns>
 
                     <!-- Status Column (Retained & Highlighted) -->

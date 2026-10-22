@@ -336,8 +336,7 @@
         <Setter Property="MinHeight" Value="46" />
         <Setter Property="Background" Value="White" />
         <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
-        <Setter Property="BorderThickness" Value="0,0,0,1" />
-        <Setter Property="BorderBrush" Value="#F1F5F9" />
+        <Setter Property="BorderThickness" Value="0" />
         <Setter Property="Cursor" Value="Hand" />
         <Style.Triggers>
             <Trigger Property="ItemsControl.AlternationIndex" Value="1">
@@ -389,8 +388,9 @@
         <Setter Property="CanUserDeleteRows" Value="False" />
         <Setter Property="CanUserResizeRows" Value="False" />
         <Setter Property="CanUserReorderColumns" Value="True" />
-        <Setter Property="GridLinesVisibility" Value="Horizontal" />
-        <Setter Property="HorizontalGridLinesBrush" Value="#E2E8F0" />
+        <Setter Property="GridLinesVisibility" Value="None" />
+        <Setter Property="HorizontalGridLinesBrush" Value="{x:Null}" />
+        <Setter Property="VerticalGridLinesBrush" Value="{x:Null}" />
         <Setter Property="EnableRowVirtualization" Value="True" />
         <Setter Property="SelectionMode" Value="Single" />
         <Setter Property="SelectionUnit" Value="FullRow" />
