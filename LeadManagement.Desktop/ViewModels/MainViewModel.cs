@@ -8,6 +8,7 @@ namespace LeadManagement.Desktop.ViewModels
         private string _username = "admin";
         private string _password = string.Empty;
         private string _currentView = "Dashboard";
+        private bool _isSidebarCollapsed = false;
 
         // Dashboard Placeholder Summary Metrics
         private string _totalLeads = "1,280";
@@ -21,11 +22,28 @@ namespace LeadManagement.Desktop.ViewModels
             LoginCommand = new RelayCommand(ExecuteLogin);
             LogoutCommand = new RelayCommand(ExecuteLogout);
             NavigateCommand = new RelayCommand(ExecuteNavigate);
+            ToggleSidebarCommand = new RelayCommand(ExecuteToggleSidebar);
         }
 
-        public string AppTitle => "Lead Management System";
-        public string ActiveUser => "Administrator";
-        public string BackendStatus => "Local Mode (Offline Test)";
+        public string AppTitle => "Leads Management System";
+        public string ActiveUser => "Admin ";
+        public string BackendStatus => "Online";
+
+        public LeadMasterlistViewModel Masterlist { get; } = new();
+
+        public bool IsSidebarCollapsed
+        {
+            get => _isSidebarCollapsed;
+            set
+            {
+                if (SetProperty(ref _isSidebarCollapsed, value))
+                {
+                    OnPropertyChanged(nameof(SidebarWidth));
+                }
+            }
+        }
+
+        public double SidebarWidth => _isSidebarCollapsed ? 68.0 : 230.0;
 
         public bool IsLoggedIn
         {
@@ -96,6 +114,12 @@ namespace LeadManagement.Desktop.ViewModels
         public ICommand LoginCommand { get; }
         public ICommand LogoutCommand { get; }
         public ICommand NavigateCommand { get; }
+        public ICommand ToggleSidebarCommand { get; }
+
+        private void ExecuteToggleSidebar()
+        {
+            IsSidebarCollapsed = !IsSidebarCollapsed;
+        }
 
         private void ExecuteLogin()
         {

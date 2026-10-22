@@ -6,36 +6,46 @@
              mc:Ignorable="d" 
              d:DesignHeight="700" d:DesignWidth="1000">
 
-    <Grid Background="{StaticResource WindowBgBrush}">
+    <Grid>
+        <!-- Background image -->
+        <Image Source="/Assets/vas-logo-term.jpg"
+            Stretch="Fill"
+            HorizontalAlignment="Stretch"
+            VerticalAlignment="Stretch"
+            Panel.ZIndex="0"/>
+
+        <!-- Dark overlay -->
+        <Border Background="#66000000" Panel.ZIndex="1"/>
+    
         <!-- Subtle background pattern or glow -->
-        <Border HorizontalAlignment="Center" 
+        <Border HorizontalAlignment="Center"  
                 VerticalAlignment="Center" 
-                Width="420"
                 Style="{StaticResource CardBorderStyle}"
-                Padding="36,40">
-            
+                Padding="36,40"
+                Panel.ZIndex="2">
+
             <StackPanel>
                 <!-- Brand / Logo Header -->
                 <StackPanel HorizontalAlignment="Center" Margin="0,0,0,24">
-                    <Border Background="{StaticResource PrimaryBrush}" 
-                            CornerRadius="8" 
-                            Width="52" 
-                            Height="52" 
-                            HorizontalAlignment="Center"
-                            Margin="0,0,0,12">
-                        <TextBlock Text="LMS" 
-                                   Foreground="White" 
-                                   FontWeight="Bold" 
-                                   FontSize="18" 
-                                   HorizontalAlignment="Center" 
-                                   VerticalAlignment="Center" />
+                    <Border 
+                        CornerRadius="8"
+                        Width="75"
+                        Height="66"
+                        HorizontalAlignment="Center"
+                        Margin="0,0,0,12"
+                        ClipToBounds="True">
+
+                        <Image Source="/Assets/vas-logo.jpg"
+                           HorizontalAlignment="Stretch"
+                           VerticalAlignment="Stretch"
+                           Stretch="UniformToFill" />
                     </Border>
-                    <TextBlock Text="Lead Management System" 
+                    <TextBlock Text="Leads Management System" 
                                FontSize="20" 
                                FontWeight="Bold" 
                                Foreground="{StaticResource TextPrimaryBrush}" 
                                HorizontalAlignment="Center" />
-                    <TextBlock Text="Sign in to access your business pipeline" 
+                    <TextBlock Text="Sign in to access the system" 
                                FontSize="13" 
                                Foreground="{StaticResource TextSecondaryBrush}" 
                                HorizontalAlignment="Center" 
@@ -50,24 +60,24 @@
                         Padding="12,10" 
                         Margin="0,0,0,24">
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                        <TextBlock Text="⚡" FontSize="14" Margin="0,0,8,0" VerticalAlignment="Center"/>
-                        <TextBlock Text="Test Mode Active: Click Sign In below to enter directly." 
+                        <TextBlock Text="Please enter your credentials to sign in." 
                                    FontSize="12" 
                                    Foreground="#1E40AF" 
                                    TextWrapping="Wrap"
-                                   VerticalAlignment="Center"/>
+                                   VerticalAlignment="Center"
+                                   HorizontalAlignment="Right"/>
                     </StackPanel>
                 </Border>
 
                 <!-- Username Input -->
-                <TextBlock Text="Username / Email" 
+                <TextBlock Text="Username" 
                            FontSize="12" 
                            FontWeight="SemiBold" 
                            Foreground="{StaticResource TextPrimaryBrush}" 
                            Margin="0,0,0,6" />
                 <TextBox Style="{StaticResource ModernTextBoxStyle}" 
                          Text="{Binding Username, UpdateSourceTrigger=PropertyChanged}" 
-                         Margin="0,0,0,16" />
+                         Margin="0,0,0,16" TextChanged="TextBox_TextChanged" />
 
                 <!-- Password Input -->
                 <TextBlock Text="Password" 
@@ -88,7 +98,7 @@
                         Margin="0,0,0,16" />
 
                 <!-- Footnote -->
-                <TextBlock Text="Desktop Shell v1.0 • Running on .NET 10" 
+                <TextBlock Text="Virtual Assistant Services Outsourcing" 
                            FontSize="11" 
                            Foreground="{StaticResource TextSecondaryBrush}" 
                            HorizontalAlignment="Center" />

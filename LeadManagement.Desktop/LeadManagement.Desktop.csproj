@@ -9,11 +9,23 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <None Remove="Assets\vas-logo-nobg.png" />
+    <None Remove="Assets\vas-logo-term.jpg" />
+    <None Remove="Assets\vas-logo.jpg" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Folder Include="Models\" />
     <Folder Include="Resources\" />
     <Folder Include="Services\" />
     <Folder Include="ViewModels\" />
     <Folder Include="View\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Resource Include="Assets\vas-logo-nobg.png" />
+    <Resource Include="Assets\vas-logo-term.jpg" />
+    <Resource Include="Assets\vas-logo.jpg" />
   </ItemGroup>
 
 </Project>

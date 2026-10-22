@@ -17,11 +17,11 @@
                 </Grid.ColumnDefinitions>
 
                 <StackPanel Grid.Column="0">
-                    <TextBlock Text="Welcome back, Administrator 👋" 
+                    <TextBlock Text="Welcome, Administrator 👋" 
                                FontSize="22" 
                                FontWeight="Bold" 
                                Foreground="{StaticResource TextPrimaryBrush}" />
-                    <TextBlock Text="Here is the live performance overview of your Lead Management System pipeline." 
+                    <TextBlock Text="Here is the live performance overview of your Leads Management System pipeline." 
                                FontSize="13" 
                                Foreground="{StaticResource TextSecondaryBrush}" 
                                Margin="0,4,0,0" />
@@ -37,16 +37,7 @@
                     <Button Content="View Masterlist" 
                             Style="{StaticResource PrimaryButtonStyle}" 
                             Command="{Binding NavigateCommand}" 
-                            CommandParameter="LeadMasterlist" RenderTransformOrigin="0.5,0.5" >
-                        <Button.RenderTransform>
-                            <TransformGroup>
-                                <ScaleTransform/>
-                                <SkewTransform/>
-                                <RotateTransform Angle="51.419"/>
-                                <TranslateTransform/>
-                            </TransformGroup>
-                        </Button.RenderTransform>
-                    </Button>
+                            CommandParameter="LeadMasterlist" />
                 </StackPanel>
             </Grid>
 

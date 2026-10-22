@@ -20,5 +20,15 @@ namespace LeadManagement.Desktop
         {
             InitializeComponent();
         }
+
+        private void LoginView_Loaded(object sender, RoutedEventArgs e)
+        {
+
+        }
+
+        private void DashboardView_Loaded(object sender, RoutedEventArgs e)
+        {
+
+        }
     }
 }
