@@ -28,4 +28,8 @@
     <Resource Include="Assets\vas-logo.jpg" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="ClosedXML" Version="0.105.1" />
+  </ItemGroup>
+
 </Project>

@@ -380,12 +380,12 @@
                     </views:LeadMasterlistView>
 
                     <!-- 3. Import Leads View -->
-                    <views:ImportLeadsView>
+                    <views:ImportLeadsView DataContext="{Binding ImportLeads}">
                         <views:ImportLeadsView.Style>
                             <Style TargetType="UserControl">
                                 <Setter Property="Visibility" Value="Collapsed" />
                                 <Style.Triggers>
-                                    <DataTrigger Binding="{Binding CurrentView}" Value="ImportLeads">
+                                    <DataTrigger Binding="{Binding DataContext.CurrentView, RelativeSource={RelativeSource AncestorType=Window}}" Value="ImportLeads">
                                         <Setter Property="Visibility" Value="Visible" />
                                     </DataTrigger>
                                 </Style.Triggers>

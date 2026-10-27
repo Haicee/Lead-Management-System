@@ -2,8 +2,13 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Threading.Tasks;
+using System.Windows;
 using System.Windows.Input;
+using ClosedXML.Excel;
 using LeadManagement.Desktop.Models;
+using LeadManagement.Desktop.Services;
+using Microsoft.Win32;
 
 namespace LeadManagement.Desktop.ViewModels
 {
@@ -16,16 +21,16 @@ namespace LeadManagement.Desktop.ViewModels
         private string _selectedCity = "All Cities";
         private string _selectedIndustry = "All Industries";
         private string _selectedStatus = "All Statuses";
+        private bool _isLoading = false;
 
         public LeadMasterlistViewModel()
         {
             ClearFiltersCommand = new RelayCommand(ExecuteClearFilters);
-            RefreshCommand = new RelayCommand(ExecuteRefresh);
+            RefreshCommand = new RelayCommand(async () => await LoadLeadsAsync());
             ExportCommand = new RelayCommand(ExecuteExport);
 
-            LoadSampleLeads();
-            PopulateFilterLists();
-            ApplyFilter();
+            // Fetch real leads from MySQL database on startup
+            _ = LoadLeadsAsync();
         }
 
         public ObservableCollection<LeadModel> FilteredLeads
@@ -47,6 +52,18 @@ namespace LeadManagement.Desktop.ViewModels
         }
 
         public bool HasSelectedLead => SelectedLead != null;
+
+        public bool IsLoading
+        {
+            get => _isLoading;
+            set
+            {
+                if (SetProperty(ref _isLoading, value))
+                {
+                    OnPropertyChanged(nameof(ShowingCountText));
+                }
+            }
+        }
 
         public string SearchText
         {
@@ -103,9 +120,54 @@ namespace LeadManagement.Desktop.ViewModels
         public int TotalCount => _allLeadsMaster.Count;
         public int FilteredCount => FilteredLeads.Count;
 
+        public string ShowingCountText
+        {
+            get
+            {
+                if (IsLoading) return "Loading...";
+                if (TotalCount == 0) return "0 Leads";
+                if (FilteredCount == TotalCount) return $"{TotalCount} Leads";
+                return $"Showing {FilteredCount} of {TotalCount} Leads";
+            }
+        }
+
         public ICommand ClearFiltersCommand { get; }
         public ICommand RefreshCommand { get; }
         public ICommand ExportCommand { get; }
+
+        /// <summary>
+        /// Fetches all leads directly from the MySQL database via the PHP REST API.
+        /// </summary>
+        public async Task LoadLeadsAsync()
+        {
+            if (IsLoading) return;
+
+            IsLoading = true;
+            try
+            {
+                var (success, _, data) = await ApiService.Instance.GetLeadsAsync(limit: 50000);
+
+                if (success && data?.Leads != null)
+                {
+                    _allLeadsMaster.Clear();
+                    _allLeadsMaster.AddRange(data.Leads);
+
+                    PopulateFilterLists();
+                    ApplyFilter();
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Could not load leads from database: {ex.Message}", "Database Connection", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+            finally
+            {
+                IsLoading = false;
+                OnPropertyChanged(nameof(TotalCount));
+                OnPropertyChanged(nameof(FilteredCount));
+                OnPropertyChanged(nameof(ShowingCountText));
+            }
+        }
 
         private void ExecuteClearFilters()
         {
@@ -122,21 +184,11 @@ namespace LeadManagement.Desktop.ViewModels
             ApplyFilter();
         }
 
-        private void ExecuteRefresh()
-        {
-            ApplyFilter();
-        }
-
-        private void ExecuteExport()
-        {
-            // Placeholder for CSV export functionality
-        }
-
         private void ApplyFilter()
         {
             IEnumerable<LeadModel> query = _allLeadsMaster;
 
-            // 1. Text Search Filter
+            // 1. Text Search Filter across multiple attributes
             if (!string.IsNullOrWhiteSpace(SearchText))
             {
                 var term = SearchText.Trim().ToLowerInvariant();
@@ -162,7 +214,7 @@ namespace LeadManagement.Desktop.ViewModels
                 query = query.Where(l => string.Equals(l.City, SelectedCity, StringComparison.OrdinalIgnoreCase));
             }
 
-            // 3. Industry Filter
+            // 3. Industry / SIC Filter
             if (!string.IsNullOrWhiteSpace(SelectedIndustry) && SelectedIndustry != "All Industries")
             {
                 query = query.Where(l => string.Equals(l.SicDescription, SelectedIndustry, StringComparison.OrdinalIgnoreCase));
@@ -177,6 +229,7 @@ namespace LeadManagement.Desktop.ViewModels
             FilteredLeads = new ObservableCollection<LeadModel>(query);
             OnPropertyChanged(nameof(FilteredCount));
             OnPropertyChanged(nameof(TotalCount));
+            OnPropertyChanged(nameof(ShowingCountText));
 
             // Select first lead by default if current selection is not in filtered list
             if (SelectedLead == null || !FilteredLeads.Contains(SelectedLead))
@@ -187,454 +240,157 @@ namespace LeadManagement.Desktop.ViewModels
 
         private void PopulateFilterLists()
         {
+            // Populate Distinct Cities
+            var currentCity = SelectedCity;
             Cities.Clear();
             Cities.Add("All Cities");
             foreach (var city in _allLeadsMaster.Select(l => l.City).Where(c => !string.IsNullOrWhiteSpace(c)).Distinct().OrderBy(c => c))
             {
                 Cities.Add(city);
             }
+            if (Cities.Contains(currentCity)) SelectedCity = currentCity;
 
+            // Populate Distinct Industries (SIC Descriptions)
+            var currentInd = SelectedIndustry;
             Industries.Clear();
             Industries.Add("All Industries");
             foreach (var ind in _allLeadsMaster.Select(l => l.SicDescription).Where(i => !string.IsNullOrWhiteSpace(i)).Distinct().OrderBy(i => i))
             {
                 Industries.Add(ind);
             }
+            if (Industries.Contains(currentInd)) SelectedIndustry = currentInd;
 
+            // Populate Statuses
+            var currentStat = SelectedStatus;
             Statuses.Clear();
             Statuses.Add("All Statuses");
             Statuses.Add("New Lead");
             Statuses.Add("Qualified");
             Statuses.Add("Follow-up");
             Statuses.Add("Contacted");
+            foreach (var s in _allLeadsMaster.Select(l => l.Status).Where(st => !string.IsNullOrWhiteSpace(st)).Distinct())
+            {
+                if (!Statuses.Contains(s)) Statuses.Add(s);
+            }
+            if (Statuses.Contains(currentStat)) SelectedStatus = currentStat;
         }
 
-        private void LoadSampleLeads()
+        /// <summary>
+        /// Exports all currently filtered leads to a genuine Excel (.xlsx) workbook with bold headers.
+        /// </summary>
+        private void ExecuteExport()
         {
-            _allLeadsMaster.Clear();
-            _allLeadsMaster.AddRange(new[]
+            var leadsToExport = FilteredLeads.ToList();
+            if (leadsToExport.Count == 0)
             {
-                new LeadModel
+                MessageBox.Show("There are no leads in the table to export.", "Export Leads", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            var dialog = new SaveFileDialog
+            {
+                Title = "Export Leads to Excel",
+                FileName = $"Leads_Export_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx",
+                Filter = "Excel Workbook (*.xlsx)|*.xlsx"
+            };
+
+            if (dialog.ShowDialog() == true)
+            {
+                try
                 {
-                    Id = 1,
-                    BusinessName = "ROSEYLNS RESTAURANT",
-                    Address = "604 HIGHWAY 6",
-                    City = "ASHLAND",
-                    County = "SAUNDERS",
-                    State = "NE",
-                    ZipCode = "68003",
-                    CellNumber = "4025212323",
-                    AnnualSales = "Less than 500,000",
-                    NumberOfEmployees = "5 to 9",
-                    Title = "OWNER",
-                    ContactName = "MS ROSELYN SMITH",
-                    Website = "",
-                    SicCode = "58120000",
-                    SicDescription = "EATING PLACES",
-                    NaicsCode = "722511",
-                    NaicsDescription = "FULL-SERVICE RESTAURANT",
-                    Status = "Qualified"
-                },
-                new LeadModel
-                {
-                    Id = 2,
-                    BusinessName = "TAQUERIA GONZALEZ",
-                    Address = "313 W INDIANA AVE",
-                    City = "NORFOLK",
-                    County = "MADISON",
-                    State = "NE",
-                    ZipCode = "68701",
-                    CellNumber = "4029925207",
-                    AnnualSales = "Less than 500,000",
-                    NumberOfEmployees = "1 to 4",
-                    Title = "PRINCIPAL",
-                    ContactName = "MS KARINA GONZALEZ",
-                    Website = "",
-                    SicCode = "58120000",
-                    SicDescription = "EATING PLACES",
-                    NaicsCode = "17116",
-                    NaicsDescription = "RESTAURANTS",
-                    Status = "New Lead"
-                },
-                new LeadModel
-                {
-                    Id = 3,
-                    BusinessName = "VIETNAMESE NOODLES",
-                    Address = "1220 RIVERSIDE BLVD",
-                    City = "NORFOLK",
-                    County = "MADISON",
-                    State = "NE",
-                    ZipCode = "68701",
-                    CellNumber = "4023167546",
-                    AnnualSales = "Less than 500,000",
-                    NumberOfEmployees = "1 to 4",
-                    Title = "MANAGER",
-                    ContactName = "MR PHAM NGUYEN",
-                    Website = "",
-                    SicCode = "58120000",
-                    SicDescription = "EATING PLACES",
-                    NaicsCode = "17116",
-                    NaicsDescription = "RESTAURANTS",
-                    Status = "Follow-up"
-                },
-                new LeadModel
-                {
-                    Id = 4,
-                    BusinessName = "BUCKS SEPTIC PUMPING",
-                    Address = "55053 US HIGHWAY",
-                    City = "NORFOLK",
-                    County = "MADISON",
-                    State = "NE",
-                    ZipCode = "68701",
-                    CellNumber = "4028601169",
-                    AnnualSales = "Less than 500,000",
-                    NumberOfEmployees = "1 to 4",
-                    Title = "PRINCIPAL",
-                    ContactName = "MR MARK BUCKINGHAM",
-                    Website = "",
-                    SicCode = "58120000",
-                    SicDescription = "PLUMBERS",
-                    NaicsCode = "110331",
-                    NaicsDescription = "PLUMBING SERVICES",
-                    Status = "Qualified"
-                },
-                new LeadModel
-                {
-                    Id = 5,
-                    BusinessName = "EAT FIT GO HEALTHY",
-                    Address = "1304 RIVERSIDE BLVD",
-                    City = "NORFOLK",
-                    County = "MADISON",
-                    State = "NE",
-                    ZipCode = "68701",
-                    CellNumber = "4023167298",
-                    AnnualSales = "Less than 500,000",
-                    NumberOfEmployees = "1 to 4",
-                    Title = "BRANCH MANAGER",
-                    ContactName = "MR TODD UHLIR",
-                    Website = "EATFITGO.COM",
-                    SicCode = "58120000",
-                    SicDescription = "EATING PLACES",
-                    NaicsCode = "722511",
-                    NaicsDescription = "FULL-SERVICE RESTAURANT",
-                    Status = "New Lead"
-                },
-                new LeadModel
-                {
-                    Id = 6,
-                    BusinessName = "SUZYMAE'S",
-                    Address = "1630 WASHINGTON ST",
-                    City = "BLAIR",
-                    County = "WASHINGTON",
-                    State = "NE",
-                    ZipCode = "68008",
-                    CellNumber = "4022782406",
-                    AnnualSales = "Less than 500,000",
-                    NumberOfEmployees = "5 to 9",
-                    Title = "PRINCIPAL",
-                    ContactName = "MS CHANDRA PETERSEN",
-                    Website = "",
-                    SicCode = "58120000",
-                    SicDescription = "BAKERIES",
-                    NaicsCode = "18106",
-                    NaicsDescription = "BAKERIES & BREAD",
-                    Status = "Contacted"
-                },
-                new LeadModel
-                {
-                    Id = 7,
-                    BusinessName = "BIG RED BARN SERVICE",
-                    Address = "702 W NORFOLK AVE",
-                    City = "NORFOLK",
-                    County = "MADISON",
-                    State = "NE",
-                    ZipCode = "68701",
-                    CellNumber = "4023213397",
-                    AnnualSales = "Less than 500,000",
-                    NumberOfEmployees = "10 to 19",
-                    Title = "SYSTEMS MANAGER",
-                    ContactName = "MR MICHAEL BEHRENS",
-                    Website = "",
-                    SicCode = "58120000",
-                    SicDescription = "EATING PLACES",
-                    NaicsCode = "722511",
-                    NaicsDescription = "FULL-SERVICE RESTAURANT",
-                    Status = "Qualified"
-                },
-                new LeadModel
-                {
-                    Id = 8,
-                    BusinessName = "AROMA CIRCUIT",
-                    Address = "1201 S 13TH ST",
-                    City = "NORFOLK",
-                    County = "MADISON",
-                    State = "NE",
-                    ZipCode = "68701",
-                    CellNumber = "4023167342",
-                    AnnualSales = "Less than 500,000",
-                    NumberOfEmployees = "10 to 19",
-                    Title = "DIRECTOR",
-                    ContactName = "MR SANJAY PATEL",
-                    Website = "AROMACIRCUIT.COM",
-                    SicCode = "58120107",
-                    SicDescription = "INDIAN/PAKISTAN RESTAURANT",
-                    NaicsCode = "722511",
-                    NaicsDescription = "FULL-SERVICE RESTAURANT",
-                    Status = "Follow-up"
-                },
-                new LeadModel
-                {
-                    Id = 9,
-                    BusinessName = "USA STEAK BUFFET",
-                    Address = "1950 BIG ISLAND RD",
-                    City = "FREMONT",
-                    County = "DODGE",
-                    State = "NE",
-                    ZipCode = "68025",
-                    CellNumber = "4028585011",
-                    AnnualSales = "Less than 500,000",
-                    NumberOfEmployees = "5 to 9",
-                    Title = "GENERAL MANAGER",
-                    ContactName = "MR BRADLEY COOPER",
-                    Website = "",
-                    SicCode = "58120000",
-                    SicDescription = "EATING PLACES",
-                    NaicsCode = "722511",
-                    NaicsDescription = "BUFFET RESTAURANTS",
-                    Status = "New Lead"
-                },
-                new LeadModel
-                {
-                    Id = 10,
-                    BusinessName = "NAPOLI'S ITALIAN RESTAURANT",
-                    Address = "35 W 6TH ST",
-                    City = "FREMONT",
-                    County = "DODGE",
-                    State = "NE",
-                    ZipCode = "68025",
-                    CellNumber = "4026204082",
-                    AnnualSales = "Less than 500,000",
-                    NumberOfEmployees = "5 to 9",
-                    Title = "HEAD CHEF / OWNER",
-                    ContactName = "MR MARCO NAPOLI",
-                    Website = "",
-                    SicCode = "58120000",
-                    SicDescription = "ITALIAN RESTAURANT",
-                    NaicsCode = "17116",
-                    NaicsDescription = "RESTAURANTS",
-                    Status = "Qualified"
-                },
-                new LeadModel
-                {
-                    Id = 11,
-                    BusinessName = "NEBRASKA CHAPTER",
-                    Address = "1425 W 9TH ST",
-                    City = "FREMONT",
-                    County = "DODGE",
-                    State = "NE",
-                    ZipCode = "68025",
-                    CellNumber = "4025479613",
-                    AnnualSales = "Less than 500,000",
-                    NumberOfEmployees = "1 to 4",
-                    Title = "PRINCIPAL",
-                    ContactName = "MR RICHARD DELOI",
-                    Website = "ACINEBRASKA.ORG",
-                    SicCode = "58120000",
-                    SicDescription = "PROFESSIONAL ASSOC",
-                    NaicsCode = "12102",
-                    NaicsDescription = "PROFESSIONAL ORGANIZATIONS",
-                    Status = "Contacted"
-                },
-                new LeadModel
-                {
-                    Id = 12,
-                    BusinessName = "CHITOS MEXICAN RESTAURANT",
-                    Address = "35 W 6TH ST",
-                    City = "FREMONT",
-                    County = "DODGE",
-                    State = "NE",
-                    ZipCode = "68025",
-                    CellNumber = "4026204314",
-                    AnnualSales = "Less than 500,000",
-                    NumberOfEmployees = "5 to 9",
-                    Title = "PRINCIPAL",
-                    ContactName = "MR AUGUSTIN RAMIREZ",
-                    Website = "",
-                    SicCode = "58120112",
-                    SicDescription = "MEXICAN RESTAURANT",
-                    NaicsCode = "722511",
-                    NaicsDescription = "FULL-SERVICE RESTAURANT",
-                    Status = "Qualified"
-                },
-                new LeadModel
-                {
-                    Id = 13,
-                    BusinessName = "JIREH RESTAURANT",
-                    Address = "635 N MAIN ST STE B",
-                    City = "FREMONT",
-                    County = "DODGE",
-                    State = "NE",
-                    ZipCode = "68025",
-                    CellNumber = "4022766993",
-                    AnnualSales = "Less than 500,000",
-                    NumberOfEmployees = "5 to 9",
-                    Title = "OWNER",
-                    ContactName = "MRS ELENA HERNANDEZ",
-                    Website = "",
-                    SicCode = "58120000",
-                    SicDescription = "EATING PLACES",
-                    NaicsCode = "722511",
-                    NaicsDescription = "FULL-SERVICE RESTAURANT",
-                    Status = "New Lead"
-                },
-                new LeadModel
-                {
-                    Id = 14,
-                    BusinessName = "TACO SMACK",
-                    Address = "1743 E MILITARY AVE",
-                    City = "FREMONT",
-                    County = "DODGE",
-                    State = "NE",
-                    ZipCode = "68025",
-                    CellNumber = "4026570494",
-                    AnnualSales = "Less than 500,000",
-                    NumberOfEmployees = "1 to 4",
-                    Title = "CO-OWNER",
-                    ContactName = "MR CARLOS MENDEZ",
-                    Website = "",
-                    SicCode = "58120112",
-                    SicDescription = "MEXICAN RESTAURANT",
-                    NaicsCode = "722511",
-                    NaicsDescription = "FULL-SERVICE RESTAURANT",
-                    Status = "Follow-up"
-                },
-                new LeadModel
-                {
-                    Id = 15,
-                    BusinessName = "TORTILLERIA ANITA",
-                    Address = "207 S BELL ST",
-                    City = "FREMONT",
-                    County = "DODGE",
-                    State = "NE",
-                    ZipCode = "68025",
-                    CellNumber = "4026204961",
-                    AnnualSales = "Less than 500,000",
-                    NumberOfEmployees = "1 to 4",
-                    Title = "MANAGER",
-                    ContactName = "MS ANITA LOPEZ",
-                    Website = "",
-                    SicCode = "58120112",
-                    SicDescription = "BAKERIES",
-                    NaicsCode = "18106",
-                    NaicsDescription = "TORTILLA MANUFACTURING",
-                    Status = "Contacted"
-                },
-                new LeadModel
-                {
-                    Id = 16,
-                    BusinessName = "TACO JOHNS",
-                    Address = "3310 E ELK LANE",
-                    City = "FREMONT",
-                    County = "DODGE",
-                    State = "NE",
-                    ZipCode = "68025",
-                    CellNumber = "4026204385",
-                    AnnualSales = "Less than 500,000",
-                    NumberOfEmployees = "5 to 9",
-                    Title = "INTERIM PRESIDENT",
-                    ContactName = "MR GERARD LEWIS",
-                    Website = "TACOJOHNS.COM",
-                    SicCode = "58120112",
-                    SicDescription = "MEXICAN RESTAURANT",
-                    NaicsCode = "722511",
-                    NaicsDescription = "FAST FOOD RESTAURANTS",
-                    Status = "Qualified"
-                },
-                new LeadModel
-                {
-                    Id = 17,
-                    BusinessName = "MIA'S COCINITA",
-                    Address = "305 S LOCUST ST",
-                    City = "GRAND ISLAND",
-                    County = "HALL",
-                    State = "NE",
-                    ZipCode = "68801",
-                    CellNumber = "3086753413",
-                    AnnualSales = "Less than 500,000",
-                    NumberOfEmployees = "1 to 4",
-                    Title = "OWNER",
-                    ContactName = "MS MIA SANCHEZ",
-                    Website = "",
-                    SicCode = "58120000",
-                    SicDescription = "EATING PLACES",
-                    NaicsCode = "17116",
-                    NaicsDescription = "RESTAURANTS",
-                    Status = "New Lead"
-                },
-                new LeadModel
-                {
-                    Id = 18,
-                    BusinessName = "PACO'S TACOS LLC",
-                    Address = "109 W 8TH ST",
-                    City = "GRAND ISLAND",
-                    County = "HALL",
-                    State = "NE",
-                    ZipCode = "68801",
-                    CellNumber = "3082271631",
-                    AnnualSales = "Less than 500,000",
-                    NumberOfEmployees = "1 to 4",
-                    Title = "FOUNDER",
-                    ContactName = "MR PACO VILLA",
-                    Website = "",
-                    SicCode = "58120000",
-                    SicDescription = "EATING PLACES",
-                    NaicsCode = "17116",
-                    NaicsDescription = "RESTAURANTS",
-                    Status = "Follow-up"
-                },
-                new LeadModel
-                {
-                    Id = 19,
-                    BusinessName = "BAMBOO CHINESE",
-                    Address = "523 W 4TH ST",
-                    City = "GRAND ISLAND",
-                    County = "HALL",
-                    State = "NE",
-                    ZipCode = "68801",
-                    CellNumber = "3086752543",
-                    AnnualSales = "Less than 500,000",
-                    NumberOfEmployees = "5 to 9",
-                    Title = "MANAGING PARTNER",
-                    ContactName = "MR DAVID CHEN",
-                    Website = "",
-                    SicCode = "58120000",
-                    SicDescription = "EATING PLACES",
-                    NaicsCode = "722511",
-                    NaicsDescription = "FULL-SERVICE RESTAURANT",
-                    Status = "Qualified"
-                },
-                new LeadModel
-                {
-                    Id = 20,
-                    BusinessName = "GARCIA/MICHEL RESTAURANT",
-                    Address = "931 S OAK ST",
-                    City = "GRAND ISLAND",
-                    County = "HALL",
-                    State = "NE",
-                    ZipCode = "68801",
-                    CellNumber = "3086750011",
-                    AnnualSales = "Less than 500,000",
-                    NumberOfEmployees = "5 to 9",
-                    Title = "OWNER",
-                    ContactName = "MR MICHEL GARCIA",
-                    Website = "",
-                    SicCode = "58120000",
-                    SicDescription = "EATING PLACES",
-                    NaicsCode = "17116",
-                    NaicsDescription = "RESTAURANTS",
-                    Status = "New Lead"
+                    using var workbook = new XLWorkbook();
+                    var worksheet = workbook.Worksheets.Add("Lead Masterlist");
+
+                    // 1. Column Header Names (All 18 table columns + batch metadata)
+                    string[] headers = new[]
+                    {
+                        "STATUS",
+                        "BUSINESS NAME",
+                        "ADDRESS",
+                        "CITY",
+                        "COUNTY",
+                        "STATE",
+                        "ZIP CODE",
+                        "CELL NUMBER",
+                        "FAX",
+                        "ANNUAL SALES",
+                        "NUMBER OF EMPLOYEE",
+                        "TITLE",
+                        "CONTACT NAME",
+                        "WEBSITE",
+                        "SIC CODE",
+                        "SIC DESCRIPTION",
+                        "NAICS CODE",
+                        "NAICS DESCRIPTION",
+                        "BATCH NAME"
+                    };
+
+                    // Format Header Row: Bold text, dark background, centered, and padded height
+                    for (int i = 0; i < headers.Length; i++)
+                    {
+                        var cell = worksheet.Cell(1, i + 1);
+                        cell.Value = headers[i];
+                        cell.Style.Font.Bold = true;
+                        cell.Style.Font.FontColor = XLColor.White;
+                        cell.Style.Fill.BackgroundColor = XLColor.FromHtml("#1E293B"); // Navy branding
+                        cell.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                        cell.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+                    }
+                    worksheet.Row(1).Height = 26;
+
+                    // 2. Data Rows
+                    int row = 2;
+                    foreach (var lead in leadsToExport)
+                    {
+                        worksheet.Cell(row, 1).SetValue(lead.Status);
+                        worksheet.Cell(row, 2).SetValue(lead.BusinessName);
+                        worksheet.Cell(row, 3).SetValue(lead.Address);
+                        worksheet.Cell(row, 4).SetValue(lead.City);
+                        worksheet.Cell(row, 5).SetValue(lead.County);
+                        worksheet.Cell(row, 6).SetValue(lead.State);
+                        worksheet.Cell(row, 7).SetValue(lead.ZipCode);
+                        worksheet.Cell(row, 8).SetValue(lead.CellNumber);
+                        worksheet.Cell(row, 9).SetValue(lead.Fax);
+                        worksheet.Cell(row, 10).SetValue(lead.AnnualSales);
+                        worksheet.Cell(row, 11).SetValue(lead.NumberOfEmployees);
+                        worksheet.Cell(row, 12).SetValue(lead.Title);
+                        worksheet.Cell(row, 13).SetValue(lead.ContactName);
+                        worksheet.Cell(row, 14).SetValue(lead.Website);
+                        worksheet.Cell(row, 15).SetValue(lead.SicCode);
+                        worksheet.Cell(row, 16).SetValue(lead.SicDescription);
+                        worksheet.Cell(row, 17).SetValue(lead.NaicsCode);
+                        worksheet.Cell(row, 18).SetValue(lead.NaicsDescription);
+                        worksheet.Cell(row, 19).SetValue(lead.BatchName);
+
+                        // Subtle alternating zebra fill for readability
+                        if (row % 2 == 1)
+                        {
+                            worksheet.Row(row).Style.Fill.BackgroundColor = XLColor.FromHtml("#F8FAFC");
+                        }
+                        worksheet.Row(row).Height = 20;
+                        row++;
+                    }
+
+                    // Auto-fit all column widths based on contents
+                    worksheet.Columns().AdjustToContents();
+
+                    workbook.SaveAs(dialog.FileName);
+
+                    MessageBox.Show(
+                        $"Successfully exported {leadsToExport.Count} leads to Excel!\n\nSaved to: {dialog.FileName}",
+                        "Export Complete",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Information);
                 }
-            });
+                catch (Exception ex)
+                {
+                    MessageBox.Show(
+                        $"Failed to export leads: {ex.Message}",
+                        "Export Error",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Error);
+                }
+            }
         }
     }
 }

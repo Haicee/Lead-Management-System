@@ -4,7 +4,8 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d" 
-             d:DesignHeight="700" d:DesignWidth="1000">
+             d:DesignHeight="700" d:DesignWidth="1000"
+             Loaded="LoginView_Loaded">
 
     <Grid>
         <!-- Background image -->
@@ -17,7 +18,7 @@
         <!-- Dark overlay -->
         <Border Background="#66000000" Panel.ZIndex="1"/>
     
-        <!-- Subtle background pattern or glow -->
+        <!-- Login Card -->
         <Border HorizontalAlignment="Center"  
                 VerticalAlignment="Center" 
                 Style="{StaticResource CardBorderStyle}"
@@ -52,7 +53,7 @@
                                Margin="0,4,0,0" />
                 </StackPanel>
 
-                <!-- Test Mode Notice Banner -->
+                <!-- Info Banner -->
                 <Border Background="#EFF6FF" 
                         BorderBrush="#BFDBFE" 
                         BorderThickness="1" 
@@ -69,6 +70,28 @@
                     </StackPanel>
                 </Border>
 
+                <!-- Error Message Banner (visible only when login fails) -->
+                <Border Background="#FEF2F2" 
+                        BorderBrush="#FECACA" 
+                        BorderThickness="1" 
+                        CornerRadius="6" 
+                        Padding="12,10" 
+                        Margin="0,0,0,16"
+                        Visibility="{Binding HasLoginError, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock Text="⚠" 
+                                   FontSize="14" 
+                                   Foreground="#DC2626" 
+                                   VerticalAlignment="Center"
+                                   Margin="0,0,8,0"/>
+                        <TextBlock Text="{Binding LoginErrorMessage}" 
+                                   FontSize="12" 
+                                   Foreground="#DC2626" 
+                                   TextWrapping="Wrap"
+                                   VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Border>
+
                 <!-- Username Input -->
                 <TextBlock Text="Username" 
                            FontSize="12" 
@@ -77,7 +100,8 @@
                            Margin="0,0,0,6" />
                 <TextBox Style="{StaticResource ModernTextBoxStyle}" 
                          Text="{Binding Username, UpdateSourceTrigger=PropertyChanged}" 
-                         Margin="0,0,0,16" TextChanged="TextBox_TextChanged" />
+                         IsEnabled="{Binding IsLoggingIn, Converter={StaticResource InverseBoolConverter}}"
+                         Margin="0,0,0,16" />
 
                 <!-- Password Input -->
                 <TextBlock Text="Password" 
@@ -87,13 +111,16 @@
                            Margin="0,0,0,6" />
                 <PasswordBox x:Name="LoginPasswordBox" 
                              Style="{StaticResource ModernPasswordBoxStyle}" 
-                             Password="••••••••"
+                             IsEnabled="{Binding IsLoggingIn, Converter={StaticResource InverseBoolConverter}}"
+                             PasswordChanged="LoginPasswordBox_PasswordChanged"
                              Margin="0,0,0,24" />
 
                 <!-- Sign In Action Button -->
-                <Button Content="Sign In to Dashboard" 
+                <Button Content="{Binding LoginButtonText}" 
                         Style="{StaticResource PrimaryButtonStyle}" 
                         Command="{Binding LoginCommand}" 
+                        IsDefault="True"
+                        IsEnabled="{Binding IsLoggingIn, Converter={StaticResource InverseBoolConverter}}"
                         Height="44" 
                         Margin="0,0,0,16" />
 

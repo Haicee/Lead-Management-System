@@ -37,7 +37,10 @@
                                    Foreground="{StaticResource TextPrimaryBrush}" 
                                    VerticalAlignment="Center" />
 
-                         
+                        <!-- Dynamic Record Counter Badge -->
+                        <Border Background="#E0F2FE" BorderBrush="#BAE6FD" BorderThickness="1" CornerRadius="10" Padding="10,3" Margin="14,0,0,0" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding ShowingCountText}" FontSize="11.5" Foreground="#0284C7" FontWeight="SemiBold" />
+                        </Border>
                     </StackPanel>
 
                     <TextBlock Text="Central database of all verified business accounts, contacts, and inquiry statuses." 
@@ -53,19 +56,13 @@
                             Style="{StaticResource SecondaryButtonStyle}" 
                             Padding="14,8" 
                             Margin="0,0,8,0"
-                            ToolTip="Reload leads from local database" />
+                            ToolTip="Reload leads from database" />
 
-                    <Button Content="⤓ Export CSV" 
+                    <Button Content="⤓ Export Excel" 
                             Command="{Binding ExportCommand}" 
                             Style="{StaticResource SecondaryButtonStyle}" 
                             Padding="14,8" 
-                            Margin="0,0,8,0"
-                            ToolTip="Export filtered table to CSV file" />
-
-                    <Button Content="+ New Lead" 
-                            Style="{StaticResource PrimaryButtonStyle}" 
-                            Padding="16,8"
-                            ToolTip="Register a new lead manually" />
+                            ToolTip="Export filtered table to Excel (.xlsx) file" />
                 </StackPanel>
             </Grid>
 
@@ -163,7 +160,7 @@
                       Style="{StaticResource ModernDataGridStyle}"
                       GridLinesVisibility="None"
                       VerticalScrollBarVisibility="Auto"
-                      HorizontalScrollBarVisibility="Auto" SelectionChanged="DataGrid_SelectionChanged">
+                      HorizontalScrollBarVisibility="Auto">
                 <DataGrid.Columns>
 
                     <!-- Status Column (Retained & Highlighted) -->
