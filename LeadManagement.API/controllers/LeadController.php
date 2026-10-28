@@ -143,9 +143,15 @@ class LeadController
         $status = $_GET['status'] ?? null;
         $city = $_GET['city'] ?? null;
         $search = $_GET['search'] ?? null;
+        $batchId = $_GET['batch_id'] ?? null;
 
         $conditions = [];
         $params = [];
+
+        if (!empty($batchId)) {
+            $conditions[] = "`batch_id` = ?";
+            $params[] = (int) $batchId;
+        }
 
         if (!empty($status) && $status !== 'All Statuses') {
             $conditions[] = "`status` = ?";
@@ -247,5 +253,79 @@ class LeadController
         ");
 
         Response::success($stmt->fetchAll(), 'Import batches retrieved');
+    }
+
+    /**
+     * GET /batches/{id}/leads
+     * 
+     * Returns all leads belonging to a specific batch.
+     */
+    public function batchLeads(int $batchId): void
+    {
+        if ($batchId <= 0) {
+            Response::error('Invalid batch ID.', 422);
+        }
+
+        $stmt = $this->db->prepare("
+            SELECT * FROM `leads` 
+            WHERE `batch_id` = ? 
+            ORDER BY `id` ASC
+        ");
+        $stmt->execute([$batchId]);
+        $leads = $stmt->fetchAll();
+
+        Response::success([
+            'batch_id' => $batchId,
+            'total'    => count($leads),
+            'leads'    => $leads
+        ], 'Batch leads retrieved successfully');
+    }
+
+    /**
+     * DELETE /batches/{id} or POST /batches/delete
+     * 
+     * Deletes a batch and all associated leads permanently.
+     */
+    public function deleteBatch(int $batchId): void
+    {
+        if ($batchId <= 0) {
+            Response::error('Invalid batch ID.', 422);
+        }
+
+        // Verify batch exists
+        $stmt = $this->db->prepare("SELECT id, batch_name, total_leads FROM `import_batches` WHERE id = ?");
+        $stmt->execute([$batchId]);
+        $batch = $stmt->fetch();
+
+        if (!$batch) {
+            Response::notFound('Batch not found.');
+        }
+
+        try {
+            $this->db->beginTransaction();
+
+            // Explicitly delete leads for this batch (cascade also covers it)
+            $delLeads = $this->db->prepare("DELETE FROM `leads` WHERE `batch_id` = ?");
+            $delLeads->execute([$batchId]);
+            $deletedLeadsCount = $delLeads->rowCount();
+
+            // Delete the batch record
+            $delBatch = $this->db->prepare("DELETE FROM `import_batches` WHERE `id` = ?");
+            $delBatch->execute([$batchId]);
+
+            $this->db->commit();
+
+            Response::success([
+                'batch_id'      => $batchId,
+                'batch_name'    => $batch['batch_name'],
+                'deleted_leads' => $deletedLeadsCount
+            ], "Batch '{$batch['batch_name']}' and its {$deletedLeadsCount} leads were deleted successfully.");
+
+        } catch (Exception $e) {
+            if ($this->db->inTransaction()) {
+                $this->db->rollBack();
+            }
+            Response::serverError('Failed to delete batch: ' . $e->getMessage());
+        }
     }
 }

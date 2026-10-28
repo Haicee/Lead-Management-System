@@ -60,9 +60,11 @@
 
                     <Button Content="⤓ Export Excel" 
                             Command="{Binding ExportCommand}" 
-                            Style="{StaticResource SecondaryButtonStyle}" 
+                            Style="{StaticResource PrimaryButtonStyle}"
                             Padding="14,8" 
                             ToolTip="Export filtered table to Excel (.xlsx) file" />
+
+                     
                 </StackPanel>
             </Grid>
 

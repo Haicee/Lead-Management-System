@@ -199,6 +199,94 @@ namespace LeadManagement.Desktop.Services
         }
 
         /// <summary>
+        /// Fetches all import batches for the Import History page.
+        /// </summary>
+        public async Task<(bool Success, string Message, System.Collections.Generic.List<ImportBatchModel>? Batches)> GetBatchesAsync()
+        {
+            try
+            {
+                var response = await _httpClient.GetAsync("batches");
+                var responseBody = await response.Content.ReadAsStringAsync();
+                var result = JsonSerializer.Deserialize<ApiResponse<System.Collections.Generic.List<ImportBatchModel>>>(responseBody);
+
+                if (result == null)
+                {
+                    return (false, "Unable to parse server response.", null);
+                }
+
+                return (result.Success, result.Message, result.Data);
+            }
+            catch (HttpRequestException)
+            {
+                return (false, "Cannot connect to server. Please ensure XAMPP Apache & MySQL are running.", null);
+            }
+            catch (Exception ex)
+            {
+                return (false, $"Error fetching import batches: {ex.Message}", null);
+            }
+        }
+
+        /// <summary>
+        /// Fetches all leads belonging to a specific batch (for preview or specific batch export).
+        /// </summary>
+        public async Task<(bool Success, string Message, System.Collections.Generic.List<LeadModel>? Leads)> GetBatchLeadsAsync(int batchId)
+        {
+            try
+            {
+                var response = await _httpClient.GetAsync($"batches/{batchId}/leads");
+                var responseBody = await response.Content.ReadAsStringAsync();
+                var result = JsonSerializer.Deserialize<ApiResponse<LeadListData>>(responseBody);
+
+                if (result == null)
+                {
+                    return (false, "Unable to parse server response.", null);
+                }
+
+                return (result.Success, result.Message, result.Data?.Leads);
+            }
+            catch (HttpRequestException)
+            {
+                return (false, "Cannot connect to server. Please ensure XAMPP Apache & MySQL are running.", null);
+            }
+            catch (Exception ex)
+            {
+                return (false, $"Error fetching batch leads: {ex.Message}", null);
+            }
+        }
+
+        /// <summary>
+        /// Deletes a batch and all associated leads permanently from the database.
+        /// </summary>
+        public async Task<(bool Success, string Message)> DeleteBatchAsync(int batchId)
+        {
+            try
+            {
+                var payload = new { id = batchId };
+                var json = JsonSerializer.Serialize(payload);
+                var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+                var response = await _httpClient.PostAsync("batches/delete", content);
+                var responseBody = await response.Content.ReadAsStringAsync();
+                var result = JsonSerializer.Deserialize<ApiResponse<object>>(responseBody);
+
+                if (result == null)
+                {
+                    return (false, "Unable to parse server response.");
+                }
+
+                return (result.Success, result.Message);
+            }
+            catch (HttpRequestException)
+            {
+                return (false, "Cannot connect to server. Please ensure XAMPP Apache & MySQL are running.");
+            }
+            catch (Exception ex)
+            {
+                return (false, $"Error deleting batch: {ex.Message}");
+            }
+        }
+
+        /// <summary>
         /// Clears the stored auth state on logout.
         /// </summary>
         public void Logout()

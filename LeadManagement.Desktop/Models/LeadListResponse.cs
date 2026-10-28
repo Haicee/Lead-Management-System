@@ -8,6 +8,9 @@ namespace LeadManagement.Desktop.Models
         [JsonPropertyName("total")]
         public int Total { get; set; }
 
+        [JsonPropertyName("batch_id")]
+        public int? BatchId { get; set; }
+
         [JsonPropertyName("limit")]
         public int Limit { get; set; }
 

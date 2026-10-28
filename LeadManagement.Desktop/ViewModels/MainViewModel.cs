@@ -35,6 +35,7 @@ namespace LeadManagement.Desktop.ViewModels
 
         public LeadMasterlistViewModel Masterlist { get; } = new();
         public ImportLeadsViewModel ImportLeads { get; } = new();
+        public ImportHistoryViewModel ImportHistory { get; } = new();
 
         // --- Active User Display (populated from API response) ---
 
@@ -272,6 +273,10 @@ namespace LeadManagement.Desktop.ViewModels
                 if (destination == "LeadMasterlist")
                 {
                     _ = Masterlist.LoadLeadsAsync();
+                }
+                else if (destination == "ImportHistory")
+                {
+                    _ = ImportHistory.LoadBatchesAsync();
                 }
             }
         }

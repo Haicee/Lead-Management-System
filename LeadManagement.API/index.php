@@ -106,6 +106,20 @@ try {
         $controller->batches();
     }
 
+    elseif ((preg_match('#^batches/(\d+)/leads$#', $path, $matches) || $path === 'batches/leads') && $method === 'GET') {
+        require_once __DIR__ . '/controllers/LeadController.php';
+        $controller = new LeadController();
+        $batchId = isset($matches[1]) ? (int)$matches[1] : (int)($_GET['batch_id'] ?? 0);
+        $controller->batchLeads($batchId);
+    }
+
+    elseif (($path === 'batches/delete' && $method === 'POST') || (preg_match('#^batches/(\d+)$#', $path, $matches) && $method === 'DELETE')) {
+        require_once __DIR__ . '/controllers/LeadController.php';
+        $controller = new LeadController();
+        $batchId = isset($matches[1]) ? (int)$matches[1] : (int)($input['id'] ?? $input['batch_id'] ?? 0);
+        $controller->deleteBatch($batchId);
+    }
+
     // 404 — No matching route
     else {
         Response::notFound("Endpoint not found: {$method} /{$path}");

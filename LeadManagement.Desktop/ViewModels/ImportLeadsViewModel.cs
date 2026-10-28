@@ -274,7 +274,7 @@ namespace LeadManagement.Desktop.ViewModels
                     int insertedCount = data?.InsertedCount ?? TotalRows;
                     int batchId = data?.BatchId ?? 1;
 
-                    StatusMessage = $"✓ Successfully imported {insertedCount} leads into the database under batch '{BatchName}' (Batch #{batchId})!";
+                    StatusMessage = $"✓ Successfully imported {insertedCount} leads into the database under batch '{BatchName}'.";
                     IsBannerError = false;
                     IsSuccessBannerVisible = true;
 

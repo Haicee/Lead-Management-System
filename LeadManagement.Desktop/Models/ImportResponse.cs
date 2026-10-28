@@ -49,5 +49,25 @@ namespace LeadManagement.Desktop.Models
 
         [JsonPropertyName("created_at")]
         public string CreatedAt { get; set; } = string.Empty;
+
+        [JsonIgnore]
+        public string FormattedDate
+        {
+            get
+            {
+                if (DateTime.TryParse(CreatedAt, out var dt))
+                {
+                    return dt.ToString("MMM dd, yyyy  h:mm tt");
+                }
+                return CreatedAt;
+            }
+        }
+
+        [JsonIgnore]
+        public string ImportedByDisplay =>
+            string.IsNullOrWhiteSpace(ImportedByUsername) ? "System Administrator" : ImportedByUsername;
+
+        [JsonIgnore]
+        public string FormattedTotalLeads => $"{TotalLeads:N0} Leads";
     }
 }

@@ -238,7 +238,7 @@
                             <ComboBox ItemsSource="{Binding Statuses}" 
                                       SelectedItem="{Binding DefaultStatus}" 
                                       Style="{StaticResource ModernComboBoxStyle}" 
-                                      ToolTip="Initial pipeline status assigned to newly imported leads" Height="43" />
+                                      ToolTip="Initial pipeline status assigned to newly imported leads" Height="48" />
                         </StackPanel>
 
                         <!-- Option 3: Batch Name Tag -->
@@ -246,7 +246,7 @@
                             <TextBlock Text="BATCH NAME" FontSize="10.5" FontWeight="SemiBold" Foreground="#64748B" Margin="0,0,0,5" />
                             <TextBox Text="{Binding BatchName, UpdateSourceTrigger=PropertyChanged}" 
                                      Style="{StaticResource ModernTextBoxStyle}" 
-                                     Height="43" 
+                                     Height="48" 
                                      ToolTip="Identifier tag for this import batch" />
                         </StackPanel>
 
@@ -259,7 +259,7 @@
                         </Grid.ColumnDefinitions>
 
                         <!-- Metric 1: Total Detected Rows -->
-                        <Border Grid.Column="0" Background="#F8FAFC" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="6" Padding="12,8" Margin="0,0,8,0">
+                        <Border Grid.Column="0" Background="#F8FAFC" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="6" Padding="12,8">
                             <StackPanel>
                                 <TextBlock Text="TOTAL LEADS" FontSize="10" FontWeight="SemiBold" Foreground="#64748B" />
                                 <TextBlock Text="{Binding TotalRows}" FontSize="18" FontWeight="Bold" Foreground="{StaticResource TextPrimaryBrush}" Margin="0,2,0,0" />

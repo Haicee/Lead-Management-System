@@ -394,12 +394,12 @@
                     </views:ImportLeadsView>
 
                     <!-- 4. Import History View -->
-                    <views:ImportHistoryView>
+                    <views:ImportHistoryView DataContext="{Binding ImportHistory}">
                         <views:ImportHistoryView.Style>
                             <Style TargetType="UserControl">
                                 <Setter Property="Visibility" Value="Collapsed" />
                                 <Style.Triggers>
-                                    <DataTrigger Binding="{Binding CurrentView}" Value="ImportHistory">
+                                    <DataTrigger Binding="{Binding DataContext.CurrentView, RelativeSource={RelativeSource AncestorType=Window}}" Value="ImportHistory">
                                         <Setter Property="Visibility" Value="Visible" />
                                     </DataTrigger>
                                 </Style.Triggers>
