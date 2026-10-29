@@ -1,0 +1,280 @@
+<UserControl x:Class="LeadManagement.Desktop.Views.DashboardView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" 
+             d:DesignHeight="750" d:DesignWidth="1050">
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Margin="32,28,32,32">
+            
+            <!-- Dashboard Header Section -->
+            <Grid Margin="0,0,0,24">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Grid.Column="0">
+                    <TextBlock Text="Welcome, Administrator 👋" 
+                               FontSize="22" 
+                               FontWeight="Bold" 
+                               Foreground="{StaticResource TextPrimaryBrush}" />
+                    <TextBlock Text="Here is the live performance overview of your Leads Management System pipeline." 
+                               FontSize="13" 
+                               Foreground="{StaticResource TextSecondaryBrush}" 
+                               Margin="0,4,0,0" />
+                </StackPanel>
+
+                <!-- Quick Action Buttons -->
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button Content="Import Leads (CSV)" 
+                            Style="{StaticResource SecondaryButtonStyle}" 
+                            Command="{Binding NavigateCommand}" 
+                            CommandParameter="ImportLeads"
+                            Margin="0,0,10,0" />
+                    <Button Content="View Masterlist" 
+                            Style="{StaticResource PrimaryButtonStyle}" 
+                            Command="{Binding NavigateCommand}" 
+                            CommandParameter="LeadMasterlist" />
+                </StackPanel>
+            </Grid>
+
+            <!-- 4 Summary KPI Cards Grid -->
+            <Grid Margin="0,0,0,28">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="16" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="16" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="16" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <!-- Card 1: Total Leads -->
+                <Border Grid.Column="0" Style="{StaticResource CardBorderStyle}" Padding="20">
+                    <StackPanel>
+                        <Grid Margin="0,0,0,12">
+                            <TextBlock Text="TOTAL LEADS" 
+                                       FontSize="11" 
+                                       FontWeight="SemiBold" 
+                                       Foreground="{StaticResource TextSecondaryBrush}" />
+                            <Border Background="#EFF6FF" CornerRadius="4" Padding="6,2" HorizontalAlignment="Right">
+                                <TextBlock Text="👥 All-Time" FontSize="11" FontWeight="Medium" Foreground="{StaticResource PrimaryBrush}" />
+                            </Border>
+                        </Grid>
+                        <TextBlock Text="{Binding TotalLeads}" 
+                                   FontSize="28" 
+                                   FontWeight="Bold" 
+                                   Foreground="{StaticResource TextPrimaryBrush}" />
+                        <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                            <TextBlock Text="↑ +12.4%" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource SuccessBrush}" />
+                            <TextBlock Text=" vs last month" FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" Margin="4,0,0,0" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <!-- Card 2: New Leads -->
+                <Border Grid.Column="2" Style="{StaticResource CardBorderStyle}" Padding="20">
+                    <StackPanel>
+                        <Grid Margin="0,0,0,12">
+                            <TextBlock Text="NEW INQUIRIES" 
+                                       FontSize="11" 
+                                       FontWeight="SemiBold" 
+                                       Foreground="{StaticResource TextSecondaryBrush}" />
+                            <Border Background="#ECFDF5" CornerRadius="4" Padding="6,2" HorizontalAlignment="Right">
+                                <TextBlock Text="⚡ This Week" FontSize="11" FontWeight="Medium" Foreground="{StaticResource SuccessBrush}" />
+                            </Border>
+                        </Grid>
+                        <TextBlock Text="{Binding NewLeads}" 
+                                   FontSize="28" 
+                                   FontWeight="Bold" 
+                                   Foreground="{StaticResource TextPrimaryBrush}" />
+                        <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                            <TextBlock Text="Fresh leads" FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" />
+                            <TextBlock Text=" pending assignment" FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" Margin="4,0,0,0" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <!-- Card 3: Qualified Leads -->
+                <Border Grid.Column="4" Style="{StaticResource CardBorderStyle}" Padding="20">
+                    <StackPanel>
+                        <Grid Margin="0,0,0,12">
+                            <TextBlock Text="QUALIFIED LEADS" 
+                                       FontSize="11" 
+                                       FontWeight="SemiBold" 
+                                       Foreground="{StaticResource TextSecondaryBrush}" />
+                            <Border Background="#F0F9FF" CornerRadius="4" Padding="6,2" HorizontalAlignment="Right">
+                                <TextBlock Text="🎯 High Intent" FontSize="11" FontWeight="Medium" Foreground="{StaticResource AccentCyanBrush}" />
+                            </Border>
+                        </Grid>
+                        <TextBlock Text="{Binding QualifiedLeads}" 
+                                   FontSize="28" 
+                                   FontWeight="Bold" 
+                                   Foreground="{StaticResource TextPrimaryBrush}" />
+                        <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                            <TextBlock Text="38% of total volume" FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <!-- Card 4: Conversion Rate -->
+                <Border Grid.Column="6" Style="{StaticResource CardBorderStyle}" Padding="20">
+                    <StackPanel>
+                        <Grid Margin="0,0,0,12">
+                            <TextBlock Text="CONVERSION RATE" 
+                                       FontSize="11" 
+                                       FontWeight="SemiBold" 
+                                       Foreground="{StaticResource TextSecondaryBrush}" />
+                            <Border Background="#FEF3C7" CornerRadius="4" Padding="6,2" HorizontalAlignment="Right">
+                                <TextBlock Text="⭐ Target Met" FontSize="11" FontWeight="Medium" Foreground="#D97706" />
+                            </Border>
+                        </Grid>
+                        <TextBlock Text="{Binding ConversionRate}" 
+                                   FontSize="28" 
+                                   FontWeight="Bold" 
+                                   Foreground="{StaticResource TextPrimaryBrush}" />
+                        <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                            <TextBlock Text="↑ +2.8%" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource SuccessBrush}" />
+                            <TextBlock Text=" benchmark" FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" Margin="4,0,0,0" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+            </Grid>
+
+            <!-- Bottom Content Grid: Recent Inquiries & Quick Stats -->
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="2*" />
+                    <ColumnDefinition Width="20" />
+                    <ColumnDefinition Width="1*" />
+                </Grid.ColumnDefinitions>
+
+                <!-- Recent Activity Table Placeholder -->
+                <Border Grid.Column="0" Style="{StaticResource CardBorderStyle}" Padding="24">
+                    <StackPanel>
+                        <Grid Margin="0,0,0,18">
+                            <TextBlock Text="Recent Inquiries (Pipeline Preview)" 
+                                       FontSize="16" 
+                                       FontWeight="Bold" 
+                                       Foreground="{StaticResource TextPrimaryBrush}" />
+                            <TextBlock Text="Live Feed" 
+                                       FontSize="12" 
+                                       Foreground="{StaticResource TextSecondaryBrush}" 
+                                       HorizontalAlignment="Right" 
+                                       VerticalAlignment="Center" />
+                        </Grid>
+
+                        <!-- Mock Lead Row 1 -->
+                        <Border Background="#F8FAFC" CornerRadius="6" Padding="14,12" Margin="0,0,0,8">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock Text="Alexander Vance" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}" />
+                                    <TextBlock Text="Apex Global Logistics • alex.vance@apex.com" FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,2,0,0" />
+                                </StackPanel>
+                                <Border Grid.Column="1" Background="#ECFDF5" CornerRadius="4" Padding="8,4" VerticalAlignment="Center" Margin="12,0">
+                                    <TextBlock Text="Qualified" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource SuccessBrush}" />
+                                </Border>
+                                <TextBlock Grid.Column="2" Text="12 mins ago" FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center" />
+                            </Grid>
+                        </Border>
+
+                        <!-- Mock Lead Row 2 -->
+                        <Border Background="#F8FAFC" CornerRadius="6" Padding="14,12" Margin="0,0,0,8">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock Text="Elena Rostova" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}" />
+                                    <TextBlock Text="Summit Retail Solutions • e.rostova@summit.org" FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,2,0,0" />
+                                </StackPanel>
+                                <Border Grid.Column="1" Background="#EFF6FF" CornerRadius="4" Padding="8,4" VerticalAlignment="Center" Margin="12,0">
+                                    <TextBlock Text="New Lead" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource PrimaryBrush}" />
+                                </Border>
+                                <TextBlock Grid.Column="2" Text="45 mins ago" FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center" />
+                            </Grid>
+                        </Border>
+
+                        <!-- Mock Lead Row 3 -->
+                        <Border Background="#F8FAFC" CornerRadius="6" Padding="14,12" Margin="0,0,0,8">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock Text="Marcus Sterling" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}" />
+                                    <TextBlock Text="Horizon Capital Group • msterling@horizon.net" FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,2,0,0" />
+                                </StackPanel>
+                                <Border Grid.Column="1" Background="#FEF3C7" CornerRadius="4" Padding="8,4" VerticalAlignment="Center" Margin="12,0">
+                                    <TextBlock Text="Follow Up" FontSize="11" FontWeight="SemiBold" Foreground="#D97706" />
+                                </Border>
+                                <TextBlock Grid.Column="2" Text="2 hours ago" FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center" />
+                            </Grid>
+                        </Border>
+
+                        <!-- View All Leads link -->
+                        <Button Content="View all leads in Masterlist →" 
+                                Style="{StaticResource SecondaryButtonStyle}" 
+                                BorderThickness="0"
+                                Command="{Binding NavigateCommand}" 
+                                CommandParameter="LeadMasterlist"
+                                HorizontalAlignment="Right" 
+                                Margin="0,10,0,0" />
+                    </StackPanel>
+                </Border>
+
+                <!-- Quick Help / Architecture Status -->
+                <Border Grid.Column="2" Style="{StaticResource CardBorderStyle}" Padding="24">
+                    <StackPanel>
+                        <TextBlock Text="System Environment" 
+                                   FontSize="16" 
+                                   FontWeight="Bold" 
+                                   Foreground="{StaticResource TextPrimaryBrush}" 
+                                   Margin="0,0,0,16" />
+
+                        <Border Background="#F1F5F9" CornerRadius="6" Padding="12" Margin="0,0,0,12">
+                            <StackPanel>
+                                <TextBlock Text="DESKTOP APP" FontSize="10" FontWeight="Bold" Foreground="{StaticResource TextSecondaryBrush}" />
+                                <TextBlock Text="LeadManagement.Desktop" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}" Margin="0,2,0,0"/>
+                                <TextBlock Text=".NET 10 • WPF Windows Client" FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" />
+                            </StackPanel>
+                        </Border>
+
+                        <Border Background="#F1F5F9" CornerRadius="6" Padding="12" Margin="0,0,0,12">
+                            <StackPanel>
+                                <TextBlock Text="BACKEND INTEGRATION" FontSize="10" FontWeight="Bold" Foreground="{StaticResource TextSecondaryBrush}" />
+                                <TextBlock Text="XAMPP / PHP API" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}" Margin="0,2,0,0"/>
+                                <TextBlock Text="Ready for future endpoint hookup" FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" />
+                            </StackPanel>
+                        </Border>
+
+                        <Border Background="#EFF6FF" BorderBrush="#DBEAFE" BorderThickness="1" CornerRadius="6" Padding="12">
+                            <StackPanel>
+                                <TextBlock Text="💡 Quick Tip" FontWeight="Bold" Foreground="#1E40AF" />
+                                <TextBlock Text="Use the left navigation sidebar buttons to switch between views anytime." 
+                                           FontSize="12" 
+                                           Foreground="#1E40AF" 
+                                           TextWrapping="Wrap" 
+                                           Margin="0,4,0,0" />
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </Border>
+            </Grid>
+
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>
