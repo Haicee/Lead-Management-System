@@ -199,7 +199,7 @@
                                 </Button.Style>
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                     <TextBlock Text="📋" FontSize="15" Width="26" TextAlignment="Center" VerticalAlignment="Center" />
-                                    <TextBlock Text="Lead Masterlist" Margin="10,0,0,0" VerticalAlignment="Center">
+                                    <TextBlock Text="Leads Masterlist" Margin="10,0,0,0" VerticalAlignment="Center">
                                         <TextBlock.Style>
                                             <Style TargetType="TextBlock">
                                                 <Setter Property="Visibility" Value="Visible" />
@@ -323,8 +323,8 @@
                                             </Style.Triggers>
                                         </Style>
                                     </StackPanel.Style>
-                                    <TextBlock Text="Lead Management Desktop" FontSize="11" FontWeight="SemiBold" Foreground="#94A3B8" />
-                                    <TextBlock Text=".NET 10 • WPF Client" FontSize="10" Foreground="#475569" Margin="0,2,0,0" />
+                                    <TextBlock Text="Virtual Assistant Services Outsourcing" FontSize="11" FontWeight="SemiBold" Foreground="#94A3B8" />
+                                    <TextBlock Text="2026" FontSize="10" Foreground="#475569" Margin="0,2,0,0" />
                                 </StackPanel>
 
                                 <!-- Collapsed footer mini badge -->

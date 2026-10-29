@@ -117,7 +117,7 @@ namespace LeadManagement.Desktop.ViewModels
         }
 
         public string PreviewHeaderTitle =>
-            PreviewBatch != null ? $"Batch #{PreviewBatch.Id}: {PreviewBatch.BatchName}" : "Batch Leads Preview";
+            PreviewBatch != null ? $" {PreviewBatch.BatchName}" : "Batch Leads Preview";
 
         public ObservableCollection<LeadModel> FilteredPreviewLeads
         {

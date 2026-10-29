@@ -292,11 +292,39 @@
                                         <Button Content="⤓ Export" 
                                                 Command="{Binding DataContext.ExportBatchCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" 
                                                 CommandParameter="{Binding}" 
-                                                Style="{StaticResource SecondaryButtonStyle}" 
                                                 Padding="10,5" 
                                                 FontSize="11.5" 
                                                 Margin="0,0,6,0" 
-                                                ToolTip="Export this batch and its leads to an Excel (.xlsx) file" />
+                                                ToolTip="Export this batch and its leads to an Excel (.xlsx) file" >
+                                            <Button.Style>
+                                                <Style TargetType="Button">
+                                                    <Setter Property="Foreground" Value="#2563EB" />
+                                                    <Setter Property="Background" Value="#EFF6FF" />
+                                                    <Setter Property="BorderBrush" Value="#BFDBFE" />
+                                                    <Setter Property="BorderThickness" Value="1" />
+                                                    <Setter Property="Template">
+                                                        <Setter.Value>
+                                                            <ControlTemplate TargetType="Button">
+                                                                <Border x:Name="btnBorder" 
+                                                                        Background="{TemplateBinding Background}" 
+                                                                        BorderBrush="{TemplateBinding BorderBrush}" 
+                                                                        BorderThickness="{TemplateBinding BorderThickness}" 
+                                                                        CornerRadius="6" 
+                                                                        Padding="{TemplateBinding Padding}">
+                                                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                                </Border>
+                                                                <ControlTemplate.Triggers>
+                                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                                        <Setter TargetName="btnBorder" Property="Background" Value="#DBEAFE" />
+                                                                        <Setter TargetName="btnBorder" Property="BorderBrush" Value="#60A5FA" />
+                                                                    </Trigger>
+                                                                </ControlTemplate.Triggers>
+                                                            </ControlTemplate>
+                                                        </Setter.Value>
+                                                    </Setter>
+                                                </Style>
+                                            </Button.Style>
+                                            </Button>
 
                                         <!-- Delete Batch Button -->
                                         <Button Content="🗑 Delete" 
@@ -384,14 +412,7 @@
 
                             <!-- Right: Quick Actions (Export this batch & Close) -->
                             <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                                <Button Content="⤓ Export this Batch" 
-                                        Command="{Binding ExportBatchCommand}" 
-                                        CommandParameter="{Binding PreviewBatch}" 
-                                        Style="{StaticResource SecondaryButtonStyle}" 
-                                        Padding="12,6" 
-                                        FontSize="11.5" 
-                                        Margin="0,0,10,0" 
-                                        ToolTip="Export this specific batch to Excel (.xlsx)" />
+                                 
 
                                 <!-- Close Button -->
                                 <Button Content="✕ Close Preview" 
