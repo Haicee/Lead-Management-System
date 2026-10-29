@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Input;
+using ClosedXML.Excel;
 using LeadManagement.Desktop.Models;
 using LeadManagement.Desktop.Services;
 using Microsoft.Win32;
@@ -214,7 +215,12 @@ namespace LeadManagement.Desktop.ViewModels
                     BatchName = Path.GetFileNameWithoutExtension(fileInfo.Name);
                 }
 
-                ParseCsvFile(fileInfo.FullName);
+                var ext = fileInfo.Extension.ToLowerInvariant();
+                LogInfo($"Selected file for import: {fileInfo.FullName} (Extension: {ext}, Size: {FileSizeDisplay})");
+                if (ext == ".xlsx" || ext == ".xls")
+                    ParseExcelFile(fileInfo.FullName);
+                else
+                    ParseCsvFile(fileInfo.FullName);
             }
         }
 
@@ -261,6 +267,9 @@ namespace LeadManagement.Desktop.ViewModels
                     record.BatchName = BatchName;
                     record.Status = DefaultStatus;
                 }
+
+                int withWeb = _allParsedRecords.Count(r => !string.IsNullOrWhiteSpace(r.Website));
+                LogInfo($"Committing batch '{BatchName}' with {_allParsedRecords.Count} leads ({withWeb} with website) to API...");
 
                 var (success, message, data) = await ApiService.Instance.ImportLeadsAsync(
                     BatchName,
@@ -338,10 +347,18 @@ namespace LeadManagement.Desktop.ViewModels
             }
         }
 
+        private static void LogInfo(string message)
+        {
+            var formatted = $"[LMS] {message}";
+            Console.WriteLine(formatted);
+            System.Diagnostics.Debug.WriteLine(formatted);
+        }
+
         private void ParseCsvFile(string path)
         {
             try
             {
+                LogInfo($"=== Parsing CSV File: {path} ===");
                 _allParsedRecords.Clear();
                 var lines = File.ReadAllLines(path);
                 if (lines.Length > 1)
@@ -351,6 +368,8 @@ namespace LeadManagement.Desktop.ViewModels
                     var headers = SplitCsvLine(headerLine)
                         .Select(h => h.Trim().ToLowerInvariant().Replace("_", " "))
                         .ToList();
+
+                    LogInfo($"[CSV] Total lines: {lines.Length}. Detected {headers.Count} headers: {string.Join(" | ", headers)}");
 
                     int GetColIndex(params string[] aliases)
                     {
@@ -380,11 +399,13 @@ namespace LeadManagement.Desktop.ViewModels
                     int idxEmp      = GetColIndex("number of employee", "employees", "number of employees");
                     int idxTitle    = GetColIndex("title", "job title");
                     int idxContact  = GetColIndex("contact name", "contact", "name");
-                    int idxWeb      = GetColIndex("website", "web", "url");
+                    int idxWeb      = GetColIndex("website", "web", "url", "site");
                     int idxSicCode  = GetColIndex("sic code", "sic");
                     int idxSicDesc  = GetColIndex("sic description", "sic desc");
                     int idxNaicsCod = GetColIndex("naics code", "naics");
                     int idxNaicsDes = GetColIndex("naics description", "naics desc");
+
+                    LogInfo($"[CSV Mapping] idxWeb={idxWeb} ('{(idxWeb >= 0 && idxWeb < headers.Count ? headers[idxWeb] : "NOT MATCHED")}'), idxBusiness={idxBusiness}, idxContact={idxContact}");
 
                     var dataRows = lines.Skip(1).ToList();
                     int rowId = 1;
@@ -405,7 +426,7 @@ namespace LeadManagement.Desktop.ViewModels
                         if (string.IsNullOrWhiteSpace(line)) continue;
                         var parts = SplitCsvLine(line);
 
-                        _allParsedRecords.Add(new LeadModel
+                        var lead = new LeadModel
                         {
                             Id = rowId++,
                             BatchName = BatchName,
@@ -427,18 +448,187 @@ namespace LeadManagement.Desktop.ViewModels
                             NaicsCode = SafeGet(parts, idxNaicsCod, 15, "722511"),
                             NaicsDescription = SafeGet(parts, idxNaicsDes, 16, "RESTAURANTS"),
                             Status = DefaultStatus
-                        });
+                        };
+
+                        if (lead.Id <= 5)
+                        {
+                            LogInfo($"[CSV Row {lead.Id}] Business='{lead.BusinessName}', Contact='{lead.ContactName}', Website='{lead.Website}'");
+                        }
+
+                        _allParsedRecords.Add(lead);
                     }
 
                     TotalRows = _allParsedRecords.Count;
                     IsFileLoaded = true;
+                    int withWebCount = _allParsedRecords.Count(r => !string.IsNullOrWhiteSpace(r.Website));
+                    LogInfo($"[CSV Done] Loaded {_allParsedRecords.Count} records. Records with website: {withWebCount}.");
                     ApplyFilter();
                     return;
                 }
             }
             catch (Exception ex)
             {
+                LogInfo($"[CSV ERROR] Could not parse CSV file: {ex.Message}\n{ex.StackTrace}");
                 StatusMessage = $"Could not parse spreadsheet: {ex.Message}";
+                IsBannerError = true;
+                IsSuccessBannerVisible = true;
+                ExecuteClearFile();
+            }
+        }
+
+        /// <summary>
+        /// Parses an .xlsx or .xls file using ClosedXML and populates the preview records list.
+        /// Uses the same dynamic column-detection logic as ParseCsvFile.
+        /// </summary>
+        private void ParseExcelFile(string path)
+        {
+            try
+            {
+                LogInfo($"=== Parsing Excel File: {path} ===");
+                _allParsedRecords.Clear();
+
+                using var workbook = new XLWorkbook(path);
+                var worksheet = workbook.Worksheets.First();
+
+                var usedRange = worksheet.RangeUsed();
+                if (usedRange == null)
+                {
+                    LogInfo("[Excel WARN] Worksheet RangeUsed is null (file appears empty).");
+                    StatusMessage = "The selected Excel file appears to be empty.";
+                    IsBannerError = true;
+                    IsSuccessBannerVisible = true;
+                    return;
+                }
+
+                var rows = usedRange.RowsUsed().ToList();
+                if (rows.Count <= 1)
+                {
+                    LogInfo($"[Excel WARN] Worksheet has {rows.Count} rows (header only or empty).");
+                    StatusMessage = "No data rows found in the Excel file (only a header row was detected).";
+                    IsBannerError = true;
+                    IsSuccessBannerVisible = true;
+                    return;
+                }
+
+                // --- Header detection (row 1) ---
+                var headerRow = rows[0];
+                var headers = headerRow.Cells()
+                    .Select(c => (c.IsEmpty() ? string.Empty : c.GetFormattedString()).Trim().ToLowerInvariant().Replace("_", " "))
+                    .ToList();
+
+                LogInfo($"[Excel] Worksheet '{worksheet.Name}' rows={rows.Count}. Headers ({headers.Count}): {string.Join(" | ", headers)}");
+
+                int GetColIndex(params string[] aliases)
+                {
+                    for (int i = 0; i < headers.Count; i++)
+                    {
+                        foreach (var alias in aliases)
+                        {
+                            if (headers[i].Equals(alias, StringComparison.OrdinalIgnoreCase) ||
+                                headers[i].Contains(alias, StringComparison.OrdinalIgnoreCase))
+                                return i;
+                        }
+                    }
+                    return -1;
+                }
+
+                int idxBusiness = GetColIndex("business name", "company", "business");
+                int idxAddress  = GetColIndex("address", "street");
+                int idxCity     = GetColIndex("city");
+                int idxCounty   = GetColIndex("county");
+                int idxState    = GetColIndex("state");
+                int idxZip      = GetColIndex("zip code", "zip", "postal");
+                int idxCell     = GetColIndex("cell number", "cell", "phone", "telephone", "mobile");
+                int idxFax      = GetColIndex("fax");
+                int idxSales    = GetColIndex("annual sales", "sales");
+                int idxEmp      = GetColIndex("number of employee", "employees", "number of employees");
+                int idxTitle    = GetColIndex("title", "job title");
+                int idxContact  = GetColIndex("contact name", "contact", "name");
+                int idxWeb      = GetColIndex("website", "web", "url", "site");
+                int idxSicCode  = GetColIndex("sic code", "sic");
+                int idxSicDesc  = GetColIndex("sic description", "sic desc");
+                int idxNaicsCod = GetColIndex("naics code", "naics");
+                int idxNaicsDes = GetColIndex("naics description", "naics desc");
+
+                LogInfo($"[Excel Mapping] idxWeb={idxWeb} ('{(idxWeb >= 0 && idxWeb < headers.Count ? headers[idxWeb] : "NOT MATCHED")}'), idxBusiness={idxBusiness}, idxContact={idxContact}");
+
+                // --- Data rows (row 2 onward) ---
+                string SafeGet(string[] parts, int index, int fallbackIndex, string defaultVal = "")
+                {
+                    int target = index >= 0 ? index : fallbackIndex;
+                    if (target >= 0 && target < parts.Length)
+                    {
+                        var val = parts[target].Trim();
+                        return string.IsNullOrEmpty(val) ? defaultVal : val;
+                    }
+                    return defaultVal;
+                }
+
+                int rowId = 1;
+                int colCount = headers.Count;
+
+                foreach (var row in rows.Skip(1))
+                {
+                    // Read each cell safely using GetFormattedString, and fallback to Hyperlink address if present
+                    var parts = Enumerable.Range(1, colCount)
+                        .Select(colNum =>
+                        {
+                            var cell = row.Cell(colNum);
+                            if (cell.IsEmpty()) return string.Empty;
+                            var val = cell.GetFormattedString().Trim();
+                            if (string.IsNullOrEmpty(val) && cell.HasHyperlink)
+                            {
+                                val = cell.GetHyperlink().ExternalAddress?.ToString()?.Trim() ?? string.Empty;
+                            }
+                            return val;
+                        })
+                        .ToArray();
+
+                    // Skip completely blank rows
+                    if (parts.All(string.IsNullOrWhiteSpace)) continue;
+
+                    var lead = new LeadModel
+                    {
+                        Id               = rowId++,
+                        BatchName        = BatchName,
+                        BusinessName     = SafeGet(parts, idxBusiness, 0, "Unnamed Business"),
+                        Address          = SafeGet(parts, idxAddress,  1),
+                        City             = SafeGet(parts, idxCity,     2),
+                        County           = SafeGet(parts, idxCounty,   3),
+                        State            = SafeGet(parts, idxState,    4, "NE"),
+                        ZipCode          = SafeGet(parts, idxZip,      5),
+                        CellNumber       = SafeGet(parts, idxCell,     6),
+                        Fax              = SafeGet(parts, idxFax,      7),
+                        AnnualSales      = SafeGet(parts, idxSales,    8, "Less than 500,000"),
+                        NumberOfEmployees= SafeGet(parts, idxEmp,      9, "1 to 4"),
+                        Title            = SafeGet(parts, idxTitle,   10),
+                        ContactName      = SafeGet(parts, idxContact, 11),
+                        Website          = SafeGet(parts, idxWeb,     12),
+                        SicCode          = SafeGet(parts, idxSicCode, 13, "58120000"),
+                        SicDescription   = SafeGet(parts, idxSicDesc, 14, "EATING PLACES"),
+                        NaicsCode        = SafeGet(parts, idxNaicsCod,15, "722511"),
+                        NaicsDescription = SafeGet(parts, idxNaicsDes,16, "RESTAURANTS"),
+                        Status           = DefaultStatus
+                    };
+
+                    if (lead.Id <= 5)
+                    {
+                        LogInfo($"[Excel Row {lead.Id}] Business='{lead.BusinessName}', Contact='{lead.ContactName}', Website='{lead.Website}'");
+                    }
+
+                    _allParsedRecords.Add(lead);
+                }
+
+                TotalRows    = _allParsedRecords.Count;
+                IsFileLoaded = true;
+                int withWebCount = _allParsedRecords.Count(r => !string.IsNullOrWhiteSpace(r.Website));
+                LogInfo($"[Excel Done] Loaded {_allParsedRecords.Count} records. Records with website: {withWebCount}.");
+                ApplyFilter();
+            }
+            catch (Exception ex)
+            {
+                LogInfo($"[Excel ERROR] Could not parse Excel file: {ex.Message}\n{ex.StackTrace}");
+                StatusMessage = $"Could not parse Excel file: {ex.Message}";
                 IsBannerError = true;
                 IsSuccessBannerVisible = true;
                 ExecuteClearFile();

@@ -152,6 +152,11 @@ namespace LeadManagement.Desktop.ViewModels
                     _allLeadsMaster.Clear();
                     _allLeadsMaster.AddRange(data.Leads);
 
+                    int withWeb = data.Leads.Count(l => !string.IsNullOrWhiteSpace(l.Website));
+                    var msg = $"[LMS Masterlist] Fetched {data.Leads.Count} leads from API. {withWeb} have website.";
+                    Console.WriteLine(msg);
+                    System.Diagnostics.Debug.WriteLine(msg);
+
                     PopulateFilterLists();
                     ApplyFilter();
                 }

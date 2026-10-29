@@ -547,25 +547,24 @@
                             <DataGridTemplateColumn Header="WEBSITE" Width="160" CanUserSort="True" SortMemberPath="Website">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
-                                        <TextBlock VerticalAlignment="Center">
-                                            <Hyperlink Foreground="#2563EB" TextDecorations="None">
-                                                <TextBlock Text="{Binding Website}" FontSize="12" />
-                                            </Hyperlink>
-                                            <TextBlock.Style>
-                                                <Style TargetType="TextBlock">
-                                                    <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding Website}" Value="">
-                                                            <Setter Property="Text" Value="—" />
-                                                            <Setter Property="Foreground" Value="#94A3B8" />
-                                                        </DataTrigger>
-                                                        <DataTrigger Binding="{Binding Website}" Value="{x:Null}">
-                                                            <Setter Property="Text" Value="—" />
-                                                            <Setter Property="Foreground" Value="#94A3B8" />
-                                                        </DataTrigger>
-                                                    </Style.Triggers>
-                                                </Style>
-                                            </TextBlock.Style>
-                                        </TextBlock>
+                                        <Grid VerticalAlignment="Center">
+                                            <TextBlock x:Name="LinkBlock" FontSize="12" TextTrimming="CharacterEllipsis">
+                                                <Hyperlink Foreground="#2563EB" TextDecorations="None">
+                                                    <Run Text="{Binding Website}" />
+                                                </Hyperlink>
+                                            </TextBlock>
+                                            <TextBlock x:Name="DashBlock" Text="—" Foreground="#94A3B8" FontSize="12" Visibility="Collapsed" />
+                                        </Grid>
+                                        <DataTemplate.Triggers>
+                                            <DataTrigger Binding="{Binding Website}" Value="">
+                                                <Setter TargetName="LinkBlock" Property="Visibility" Value="Collapsed" />
+                                                <Setter TargetName="DashBlock" Property="Visibility" Value="Visible" />
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding Website}" Value="{x:Null}">
+                                                <Setter TargetName="LinkBlock" Property="Visibility" Value="Collapsed" />
+                                                <Setter TargetName="DashBlock" Property="Visibility" Value="Visible" />
+                                            </DataTrigger>
+                                        </DataTemplate.Triggers>
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellTemplate>
                             </DataGridTemplateColumn>

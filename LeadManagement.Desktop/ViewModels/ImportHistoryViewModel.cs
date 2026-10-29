@@ -248,6 +248,10 @@ namespace LeadManagement.Desktop.ViewModels
                 if (success && leads != null)
                 {
                     _allPreviewLeads.AddRange(leads);
+                    int withWeb = leads.Count(l => !string.IsNullOrWhiteSpace(l.Website));
+                    var msg = $"[LMS ImportHistory] Loaded {leads.Count} leads for batch '{batch.BatchName}'. {withWeb} have website.";
+                    Console.WriteLine(msg);
+                    System.Diagnostics.Debug.WriteLine(msg);
                 }
 
                 ApplyPreviewFilter();
