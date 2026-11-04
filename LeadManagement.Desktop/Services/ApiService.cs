@@ -145,17 +145,21 @@ namespace LeadManagement.Desktop.Services
             string? search = null,
             string? status = null,
             string? city = null,
-            int limit = 5000,
+            string? county = null,
+            string? state = null,
+            int limit = 0,
             int offset = 0)
         {
             try
             {
                 var queryParams = new System.Collections.Generic.List<string>();
-                if (limit > 0) queryParams.Add($"limit={limit}");
+                if (limit >= 0) queryParams.Add($"limit={limit}");
                 if (offset > 0) queryParams.Add($"offset={offset}");
                 if (!string.IsNullOrWhiteSpace(search)) queryParams.Add($"search={Uri.EscapeDataString(search)}");
                 if (!string.IsNullOrWhiteSpace(status) && status != "All Statuses") queryParams.Add($"status={Uri.EscapeDataString(status)}");
                 if (!string.IsNullOrWhiteSpace(city) && city != "All Cities") queryParams.Add($"city={Uri.EscapeDataString(city)}");
+                if (!string.IsNullOrWhiteSpace(county) && county != "All Counties") queryParams.Add($"county={Uri.EscapeDataString(county)}");
+                if (!string.IsNullOrWhiteSpace(state) && state != "All States") queryParams.Add($"state={Uri.EscapeDataString(state)}");
 
                 var url = "leads" + (queryParams.Count > 0 ? "?" + string.Join("&", queryParams) : "");
                 var response = await _httpClient.GetAsync(url);

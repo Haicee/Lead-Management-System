@@ -138,10 +138,19 @@ class LeadController
      */
     public function index(): void
     {
+        @ini_set('memory_limit', '1024M');
+        @set_time_limit(300);
+
         $limit = isset($_GET['limit']) ? (int) $_GET['limit'] : 5000;
         $offset = isset($_GET['offset']) ? max((int) $_GET['offset'], 0) : 0;
         $status = $_GET['status'] ?? null;
         $city = $_GET['city'] ?? null;
+        $county = $_GET['county'] ?? null;
+        $state = $_GET['state'] ?? null;
+        $annualSales = $_GET['annual_sales'] ?? null;
+        $naicsCode = $_GET['naics_code'] ?? null;
+        $naicsDesc = $_GET['naics_description'] ?? null;
+        $sicDesc = $_GET['sic_description'] ?? null;
         $search = $_GET['search'] ?? null;
         $batchId = $_GET['batch_id'] ?? null;
 
@@ -161,6 +170,36 @@ class LeadController
         if (!empty($city) && $city !== 'All Cities') {
             $conditions[] = "`city` = ?";
             $params[] = $city;
+        }
+
+        if (!empty($county) && $county !== 'All Counties') {
+            $conditions[] = "`county` = ?";
+            $params[] = $county;
+        }
+
+        if (!empty($state) && $state !== 'All States') {
+            $conditions[] = "`state` = ?";
+            $params[] = $state;
+        }
+
+        if (!empty($annualSales) && $annualSales !== 'All Sales Ranges') {
+            $conditions[] = "`annual_sales` = ?";
+            $params[] = $annualSales;
+        }
+
+        if (!empty($naicsCode) && $naicsCode !== 'All NAICS Codes') {
+            $conditions[] = "`naics_code` = ?";
+            $params[] = $naicsCode;
+        }
+
+        if (!empty($naicsDesc) && $naicsDesc !== 'All NAICS Descriptions') {
+            $conditions[] = "`naics_description` = ?";
+            $params[] = $naicsDesc;
+        }
+
+        if (!empty($sicDesc) && $sicDesc !== 'All Industries') {
+            $conditions[] = "`sic_description` = ?";
+            $params[] = $sicDesc;
         }
 
         if (!empty($search)) {
@@ -202,19 +241,28 @@ class LeadController
     /**
      * GET /leads/filters
      * 
-     * Returns distinct cities and statuses present in the database.
+     * Returns distinct filter options present in the database.
      */
     public function filters(): void
     {
-        $citiesStmt = $this->db->query("SELECT DISTINCT `city` FROM `leads` WHERE `city` IS NOT NULL AND `city` != '' ORDER BY `city` ASC");
-        $cities = $citiesStmt->fetchAll(PDO::FETCH_COLUMN);
-
-        $statusesStmt = $this->db->query("SELECT DISTINCT `status` FROM `leads` WHERE `status` IS NOT NULL AND `status` != '' ORDER BY `status` ASC");
-        $statuses = $statusesStmt->fetchAll(PDO::FETCH_COLUMN);
+        $cities = $this->db->query("SELECT DISTINCT `city` FROM `leads` WHERE `city` IS NOT NULL AND `city` != '' ORDER BY `city` ASC")->fetchAll(PDO::FETCH_COLUMN);
+        $counties = $this->db->query("SELECT DISTINCT `county` FROM `leads` WHERE `county` IS NOT NULL AND `county` != '' ORDER BY `county` ASC")->fetchAll(PDO::FETCH_COLUMN);
+        $states = $this->db->query("SELECT DISTINCT `state` FROM `leads` WHERE `state` IS NOT NULL AND `state` != '' ORDER BY `state` ASC")->fetchAll(PDO::FETCH_COLUMN);
+        $statuses = $this->db->query("SELECT DISTINCT `status` FROM `leads` WHERE `status` IS NOT NULL AND `status` != '' ORDER BY `status` ASC")->fetchAll(PDO::FETCH_COLUMN);
+        $industries = $this->db->query("SELECT DISTINCT `sic_description` FROM `leads` WHERE `sic_description` IS NOT NULL AND `sic_description` != '' ORDER BY `sic_description` ASC")->fetchAll(PDO::FETCH_COLUMN);
+        $annualSales = $this->db->query("SELECT DISTINCT `annual_sales` FROM `leads` WHERE `annual_sales` IS NOT NULL AND `annual_sales` != '' ORDER BY `annual_sales` ASC")->fetchAll(PDO::FETCH_COLUMN);
+        $naicsCodes = $this->db->query("SELECT DISTINCT `naics_code` FROM `leads` WHERE `naics_code` IS NOT NULL AND `naics_code` != '' ORDER BY `naics_code` ASC")->fetchAll(PDO::FETCH_COLUMN);
+        $naicsDescs = $this->db->query("SELECT DISTINCT `naics_description` FROM `leads` WHERE `naics_description` IS NOT NULL AND `naics_description` != '' ORDER BY `naics_description` ASC")->fetchAll(PDO::FETCH_COLUMN);
 
         Response::success([
-            'cities'   => $cities,
-            'statuses' => $statuses
+            'cities'             => $cities,
+            'counties'           => $counties,
+            'states'             => $states,
+            'statuses'           => $statuses,
+            'industries'         => $industries,
+            'annual_sales'       => $annualSales,
+            'naics_codes'        => $naicsCodes,
+            'naics_descriptions' => $naicsDescs
         ], 'Filter options retrieved');
     }
 

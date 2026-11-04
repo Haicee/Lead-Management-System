@@ -4,6 +4,7 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:viewmodels="clr-namespace:LeadManagement.Desktop.ViewModels"
+             xmlns:controls="clr-namespace:LeadManagement.Desktop.Controls"
              mc:Ignorable="d" 
              d:DataContext="{d:DesignInstance Type=viewmodels:LeadMasterlistViewModel, IsDesignTimeCreatable=True}"
              d:DesignHeight="800" d:DesignWidth="1200"
@@ -58,95 +59,150 @@
                             Margin="0,0,8,0"
                             ToolTip="Reload leads from database" />
 
-                    <Button Content="⤓ Export Excel" 
-                            Command="{Binding ExportCommand}" 
+                    <Button Content="{Binding ExportFilteredButtonText}" 
+                            Command="{Binding ExportFilteredCommand}" 
                             Style="{StaticResource PrimaryButtonStyle}"
                             Padding="14,8" 
-                            ToolTip="Export filtered table to Excel (.xlsx) file" />
+                            Margin="0,0,8,0"
+                            ToolTip="Export currently filtered leads to Excel (.xlsx)" />
 
-                     
+                    <Button Content="{Binding ExportAllButtonText}" 
+                            Command="{Binding ExportAllCommand}" 
+                            Style="{StaticResource PrimaryButtonStyle}"
+                            Padding="14,8" 
+                            ToolTip="Export all leads in the master database to Excel (.xlsx)" />
                 </StackPanel>
             </Grid>
 
             <!-- Search & Multi-Filter Card -->
             <Border Style="{StaticResource CardBorderStyle}" Padding="16,14">
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="2*" />   <!-- Search Bar -->
-                        <ColumnDefinition Width="140" />  <!-- City Filter -->
-                        <ColumnDefinition Width="160" />  <!-- Industry Filter -->
-                        <ColumnDefinition Width="140" />  <!-- Status Filter -->
-                        <ColumnDefinition Width="Auto" /> <!-- Reset Button -->
-                    </Grid.ColumnDefinitions>
+                <StackPanel>
+                    <!-- Row 1: Search Bar & Reset Button -->
+                    <Grid Margin="0,0,0,10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
 
-                    <!-- 1. Real-time Search Box -->
-                    <Grid Grid.Column="0" Margin="0,0,12,0">
-                        <TextBox Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" 
-                                 Style="{StaticResource ModernTextBoxStyle}" 
-                                 Padding="36,9,12,9" />
-                        <!-- Search Icon -->
-                        <TextBlock Text="🔍" 
-                                   Foreground="#94A3B8" 
-                                   FontSize="13" 
-                                   VerticalAlignment="Center" 
-                                   HorizontalAlignment="Left" 
-                                   Margin="12,0,0,0" 
-                                   IsHitTestVisible="False" />
-                        <!-- Ghost Placeholder Text when empty -->
-                        <TextBlock Text="Search by business name, contact, phone, city, title..." 
-                                   Foreground="#94A3B8" 
-                                   FontSize="13" 
-                                   VerticalAlignment="Center" 
-                                   Margin="38,0,0,0" 
-                                   IsHitTestVisible="False">
-                            <TextBlock.Style>
-                                <Style TargetType="TextBlock">
-                                    <Setter Property="Visibility" Value="Collapsed" />
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding SearchText}" Value="">
-                                            <Setter Property="Visibility" Value="Visible" />
-                                        </DataTrigger>
-                                        <DataTrigger Binding="{Binding SearchText}" Value="{x:Null}">
-                                            <Setter Property="Visibility" Value="Visible" />
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </TextBlock.Style>
-                        </TextBlock>
+                        <!-- 1. Real-time Search Box -->
+                        <Grid Grid.Column="0" Margin="0,0,12,0">
+                            <TextBox Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" 
+                                     Style="{StaticResource ModernTextBoxStyle}" 
+                                     Padding="36,9,12,9" />
+                            <!-- Search Icon -->
+                            <TextBlock Text="🔍" 
+                                       Foreground="#94A3B8" 
+                                       FontSize="13" 
+                                       VerticalAlignment="Center" 
+                                       HorizontalAlignment="Left" 
+                                       Margin="12,0,0,0" 
+                                       IsHitTestVisible="False" />
+                            <!-- Ghost Placeholder Text when empty -->
+                            <TextBlock Text="Search by business name, contact, phone, city, county, NAICS, title..." 
+                                       Foreground="#94A3B8" 
+                                       FontSize="13" 
+                                       VerticalAlignment="Center" 
+                                       Margin="38,0,0,0" 
+                                       IsHitTestVisible="False">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding SearchText}" Value="">
+                                                <Setter Property="Visibility" Value="Visible" />
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding SearchText}" Value="{x:Null}">
+                                                <Setter Property="Visibility" Value="Visible" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </Grid>
+
+                        <!-- Reset Filters Button -->
+                        <Button Grid.Column="1" 
+                                Content="✕ Reset Filters" 
+                                Command="{Binding ClearFiltersCommand}" 
+                                Style="{StaticResource SecondaryButtonStyle}" 
+                                Padding="14,8"
+                                ToolTip="Clear all search terms and reset all dropdown filters" />
                     </Grid>
 
-                    <!-- 2. City Filter Dropdown -->
-                    <ComboBox Grid.Column="1" 
-                              ItemsSource="{Binding Cities}" 
-                              SelectedItem="{Binding SelectedCity}" 
-                              Style="{StaticResource ModernComboBoxStyle}" 
-                              Margin="0,0,12,0" 
-                              ToolTip="Filter by City" />
+                    <!-- Row 2: Location & Status Filters (4 Columns) — Multi-Select Checkboxes -->
+                    <Grid Margin="0,0,0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
 
-                    <!-- 3. Industry / SIC Filter Dropdown -->
-                    <ComboBox Grid.Column="2" 
-                              ItemsSource="{Binding Industries}" 
-                              SelectedItem="{Binding SelectedIndustry}" 
-                              Style="{StaticResource ModernComboBoxStyle}" 
-                              Margin="0,0,12,0" 
-                              ToolTip="Filter by Industry" />
+                        <!-- City (multi-select) -->
+                        <controls:MultiSelectDropdown Grid.Column="0"
+                                  ItemsSource="{Binding CityItems}"
+                                  HeaderText="All Cities"
+                                  Margin="0,0,8,0"
+                                  ToolTip="Filter by City — select multiple cities" />
 
-                    <!-- 4. Status Filter Dropdown -->
-                    <ComboBox Grid.Column="3" 
-                              ItemsSource="{Binding Statuses}" 
-                              SelectedItem="{Binding SelectedStatus}" 
-                              Style="{StaticResource ModernComboBoxStyle}" 
-                              Margin="0,0,12,0" 
-                              ToolTip="Filter by Lead Status" />
+                        <!-- County (multi-select) -->
+                        <controls:MultiSelectDropdown Grid.Column="1"
+                                  ItemsSource="{Binding CountyItems}"
+                                  HeaderText="All Counties"
+                                  Margin="0,0,8,0"
+                                  ToolTip="Filter by County — select multiple counties" />
 
-                    <!-- 5. Reset Filters Button -->
-                    <Button Grid.Column="4" 
-                            Content="✕ Reset" 
-                            Command="{Binding ClearFiltersCommand}" 
-                            Style="{StaticResource SecondaryButtonStyle}" 
-                            Padding="12,8"
-                            ToolTip="Clear all search terms and dropdown filters" />
-                </Grid>
+                        <!-- State (multi-select) -->
+                        <controls:MultiSelectDropdown Grid.Column="2"
+                                  ItemsSource="{Binding StateItems}"
+                                  HeaderText="All States"
+                                  Margin="0,0,8,0"
+                                  ToolTip="Filter by State — select multiple states" />
+
+                        <!-- Status (multi-select) -->
+                        <controls:MultiSelectDropdown Grid.Column="3"
+                                  ItemsSource="{Binding StatusItems}"
+                                  HeaderText="All Statuses"
+                                  ToolTip="Filter by Lead Status — select multiple statuses" />
+                    </Grid>
+
+                    <!-- Row 3: Demographics & Classification Filters (4 Columns) — Multi-Select Checkboxes -->
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+
+                        <!-- Industry / SIC Description (multi-select) -->
+                        <controls:MultiSelectDropdown Grid.Column="0"
+                                  ItemsSource="{Binding IndustryItems}"
+                                  HeaderText="All Industries"
+                                  Margin="0,0,8,0"
+                                  ToolTip="Filter by Industry (SIC Description) — select multiple" />
+
+                        <!-- Annual Sales (multi-select) -->
+                        <controls:MultiSelectDropdown Grid.Column="1"
+                                  ItemsSource="{Binding AnnualSalesItems}"
+                                  HeaderText="All Sales Ranges"
+                                  Margin="0,0,8,0"
+                                  ToolTip="Filter by Annual Sales Range — select multiple" />
+
+                        <!-- NAICS Code (multi-select) -->
+                        <controls:MultiSelectDropdown Grid.Column="2"
+                                  ItemsSource="{Binding NaicsCodeItems}"
+                                  HeaderText="All NAICS Codes"
+                                  Margin="0,0,8,0"
+                                  ToolTip="Filter by NAICS Code — select multiple" />
+
+                        <!-- NAICS Description (multi-select) -->
+                        <controls:MultiSelectDropdown Grid.Column="3"
+                                  ItemsSource="{Binding NaicsDescItems}"
+                                  HeaderText="All NAICS Descriptions"
+                                  ToolTip="Filter by NAICS Description — select multiple" />
+                    </Grid>
+                </StackPanel>
             </Border>
         </StackPanel>
 
@@ -160,6 +216,9 @@
             <DataGrid ItemsSource="{Binding FilteredLeads}"     
                       SelectedItem="{Binding SelectedLead, Mode=TwoWay}"
                       Style="{StaticResource ModernDataGridStyle}"
+                      EnableRowVirtualization="True"
+                      VirtualizingPanel.IsVirtualizing="True"
+                      VirtualizingPanel.VirtualizationMode="Recycling"
                       GridLinesVisibility="None"
                       VerticalScrollBarVisibility="Auto"
                       HorizontalScrollBarVisibility="Auto">

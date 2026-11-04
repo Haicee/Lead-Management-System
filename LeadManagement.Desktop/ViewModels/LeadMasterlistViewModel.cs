@@ -18,16 +18,15 @@ namespace LeadManagement.Desktop.ViewModels
         private ObservableCollection<LeadModel> _filteredLeads = new();
         private LeadModel? _selectedLead;
         private string _searchText = string.Empty;
-        private string _selectedCity = "All Cities";
-        private string _selectedIndustry = "All Industries";
-        private string _selectedStatus = "All Statuses";
         private bool _isLoading = false;
 
         public LeadMasterlistViewModel()
         {
             ClearFiltersCommand = new RelayCommand(ExecuteClearFilters);
             RefreshCommand = new RelayCommand(async () => await LoadLeadsAsync());
-            ExportCommand = new RelayCommand(ExecuteExport);
+            ExportFilteredCommand = new RelayCommand(ExecuteExportFiltered);
+            ExportAllCommand = new RelayCommand(ExecuteExportAll);
+            ExportCommand = new RelayCommand(ExecuteExportFiltered); // Default export action
 
             // Fetch real leads from MySQL database on startup
             _ = LoadLeadsAsync();
@@ -77,48 +76,32 @@ namespace LeadManagement.Desktop.ViewModels
             }
         }
 
-        public ObservableCollection<string> Cities { get; } = new();
-        public ObservableCollection<string> Industries { get; } = new();
-        public ObservableCollection<string> Statuses { get; } = new();
+        // ─── Multi-Select Filter Collections (ObservableCollection<FilterItem>) ───
 
-        public string SelectedCity
-        {
-            get => _selectedCity;
-            set
-            {
-                if (SetProperty(ref _selectedCity, value))
-                {
-                    ApplyFilter();
-                }
-            }
-        }
+        public ObservableCollection<FilterItem> CityItems { get; } = new();
+        public ObservableCollection<FilterItem> CountyItems { get; } = new();
+        public ObservableCollection<FilterItem> StateItems { get; } = new();
+        public ObservableCollection<FilterItem> IndustryItems { get; } = new();
+        public ObservableCollection<FilterItem> AnnualSalesItems { get; } = new();
+        public ObservableCollection<FilterItem> NaicsCodeItems { get; } = new();
+        public ObservableCollection<FilterItem> NaicsDescItems { get; } = new();
+        public ObservableCollection<FilterItem> StatusItems { get; } = new();
 
-        public string SelectedIndustry
-        {
-            get => _selectedIndustry;
-            set
-            {
-                if (SetProperty(ref _selectedIndustry, value))
-                {
-                    ApplyFilter();
-                }
-            }
-        }
-
-        public string SelectedStatus
-        {
-            get => _selectedStatus;
-            set
-            {
-                if (SetProperty(ref _selectedStatus, value))
-                {
-                    ApplyFilter();
-                }
-            }
-        }
+        // ─── Computed Properties ─────────────────────────────────────────────────
 
         public int TotalCount => _allLeadsMaster.Count;
         public int FilteredCount => FilteredLeads.Count;
+
+        public bool HasActiveFilters =>
+            !string.IsNullOrWhiteSpace(SearchText) ||
+            CityItems.Any(i => i.IsSelected) ||
+            CountyItems.Any(i => i.IsSelected) ||
+            StateItems.Any(i => i.IsSelected) ||
+            IndustryItems.Any(i => i.IsSelected) ||
+            AnnualSalesItems.Any(i => i.IsSelected) ||
+            NaicsCodeItems.Any(i => i.IsSelected) ||
+            NaicsDescItems.Any(i => i.IsSelected) ||
+            StatusItems.Any(i => i.IsSelected);
 
         public string ShowingCountText
         {
@@ -126,17 +109,44 @@ namespace LeadManagement.Desktop.ViewModels
             {
                 if (IsLoading) return "Loading...";
                 if (TotalCount == 0) return "0 Leads";
-                if (FilteredCount == TotalCount) return $"{TotalCount} Leads";
-                return $"Showing {FilteredCount} of {TotalCount} Leads";
+                if (FilteredCount == TotalCount) return $"{TotalCount:N0} Leads";
+                return $"Showing {FilteredCount:N0} of {TotalCount:N0} Leads";
             }
         }
 
+        public string ExportFilteredButtonText =>
+            HasActiveFilters
+                ? $"⤓ Export Filtered ({FilteredCount:N0})"
+                : "⤓ Export Filtered";
+
+        public string ExportAllButtonText => $"⤓ Export All";
+
         public ICommand ClearFiltersCommand { get; }
         public ICommand RefreshCommand { get; }
+        public ICommand ExportFilteredCommand { get; }
+        public ICommand ExportAllCommand { get; }
         public ICommand ExportCommand { get; }
+
+        // ─── Helper: Extract selected names as a HashSet for fast OR matching ─────
+
+        private static HashSet<string> GetSelected(ObservableCollection<FilterItem> items) =>
+            new(items.Where(i => i.IsSelected).Select(i => i.Name), StringComparer.OrdinalIgnoreCase);
+
+        // ─── Subscribe to FilterItem changes so filter re-runs on every checkbox toggle ─
+
+        private void SubscribeToItems(ObservableCollection<FilterItem> items)
+        {
+            foreach (var item in items)
+                item.PropertyChanged += (_, e) =>
+                {
+                    if (e.PropertyName == nameof(FilterItem.IsSelected))
+                        ApplyFilter();
+                };
+        }
 
         /// <summary>
         /// Fetches all leads directly from the MySQL database via the PHP REST API.
+        /// Passes limit=0 to retrieve the complete dataset without truncation.
         /// </summary>
         public async Task LoadLeadsAsync()
         {
@@ -145,7 +155,7 @@ namespace LeadManagement.Desktop.ViewModels
             IsLoading = true;
             try
             {
-                var (success, _, data) = await ApiService.Instance.GetLeadsAsync(limit: 50000);
+                var (success, _, data) = await ApiService.Instance.GetLeadsAsync(limit: 0);
 
                 if (success && data?.Leads != null)
                 {
@@ -171,20 +181,26 @@ namespace LeadManagement.Desktop.ViewModels
                 OnPropertyChanged(nameof(TotalCount));
                 OnPropertyChanged(nameof(FilteredCount));
                 OnPropertyChanged(nameof(ShowingCountText));
+                OnPropertyChanged(nameof(HasActiveFilters));
+                OnPropertyChanged(nameof(ExportFilteredButtonText));
+                OnPropertyChanged(nameof(ExportAllButtonText));
             }
         }
 
         private void ExecuteClearFilters()
         {
             _searchText = string.Empty;
-            _selectedCity = "All Cities";
-            _selectedIndustry = "All Industries";
-            _selectedStatus = "All Statuses";
-
             OnPropertyChanged(nameof(SearchText));
-            OnPropertyChanged(nameof(SelectedCity));
-            OnPropertyChanged(nameof(SelectedIndustry));
-            OnPropertyChanged(nameof(SelectedStatus));
+
+            // Deselect all items in every filter collection
+            foreach (var item in CityItems) item.IsSelected = false;
+            foreach (var item in CountyItems) item.IsSelected = false;
+            foreach (var item in StateItems) item.IsSelected = false;
+            foreach (var item in IndustryItems) item.IsSelected = false;
+            foreach (var item in AnnualSalesItems) item.IsSelected = false;
+            foreach (var item in NaicsCodeItems) item.IsSelected = false;
+            foreach (var item in NaicsDescItems) item.IsSelected = false;
+            foreach (var item in StatusItems) item.IsSelected = false;
 
             ApplyFilter();
         }
@@ -203,7 +219,9 @@ namespace LeadManagement.Desktop.ViewModels
                     (l.CellNumber?.Contains(term) ?? false) ||
                     (l.City?.ToLowerInvariant().Contains(term) ?? false) ||
                     (l.County?.ToLowerInvariant().Contains(term) ?? false) ||
+                    (l.State?.ToLowerInvariant().Contains(term) ?? false) ||
                     (l.ZipCode?.Contains(term) ?? false) ||
+                    (l.AnnualSales?.ToLowerInvariant().Contains(term) ?? false) ||
                     (l.SicCode?.Contains(term) ?? false) ||
                     (l.SicDescription?.ToLowerInvariant().Contains(term) ?? false) ||
                     (l.NaicsCode?.Contains(term) ?? false) ||
@@ -213,30 +231,55 @@ namespace LeadManagement.Desktop.ViewModels
                     (l.Address?.ToLowerInvariant().Contains(term) ?? false));
             }
 
-            // 2. City Filter
-            if (!string.IsNullOrWhiteSpace(SelectedCity) && SelectedCity != "All Cities")
-            {
-                query = query.Where(l => string.Equals(l.City, SelectedCity, StringComparison.OrdinalIgnoreCase));
-            }
+            // 2. City Filter (OR within selected cities, skip if none selected)
+            var selectedCities = GetSelected(CityItems);
+            if (selectedCities.Count > 0)
+                query = query.Where(l => selectedCities.Contains(l.City ?? string.Empty));
 
-            // 3. Industry / SIC Filter
-            if (!string.IsNullOrWhiteSpace(SelectedIndustry) && SelectedIndustry != "All Industries")
-            {
-                query = query.Where(l => string.Equals(l.SicDescription, SelectedIndustry, StringComparison.OrdinalIgnoreCase));
-            }
+            // 3. County Filter (OR within selected counties)
+            var selectedCounties = GetSelected(CountyItems);
+            if (selectedCounties.Count > 0)
+                query = query.Where(l => selectedCounties.Contains(l.County ?? string.Empty));
 
-            // 4. Status Filter
-            if (!string.IsNullOrWhiteSpace(SelectedStatus) && SelectedStatus != "All Statuses")
-            {
-                query = query.Where(l => string.Equals(l.Status, SelectedStatus, StringComparison.OrdinalIgnoreCase));
-            }
+            // 4. State Filter (OR within selected states)
+            var selectedStates = GetSelected(StateItems);
+            if (selectedStates.Count > 0)
+                query = query.Where(l => selectedStates.Contains(l.State ?? string.Empty));
+
+            // 5. Industry / SIC Filter (OR within selected industries)
+            var selectedIndustries = GetSelected(IndustryItems);
+            if (selectedIndustries.Count > 0)
+                query = query.Where(l => selectedIndustries.Contains(l.SicDescription ?? string.Empty));
+
+            // 6. Annual Sales Filter (OR within selected sales ranges)
+            var selectedSales = GetSelected(AnnualSalesItems);
+            if (selectedSales.Count > 0)
+                query = query.Where(l => selectedSales.Contains(l.AnnualSales ?? string.Empty));
+
+            // 7. NAICS Code Filter (OR within selected codes)
+            var selectedNaicsCodes = GetSelected(NaicsCodeItems);
+            if (selectedNaicsCodes.Count > 0)
+                query = query.Where(l => selectedNaicsCodes.Contains(l.NaicsCode ?? string.Empty));
+
+            // 8. NAICS Description Filter (OR within selected descriptions)
+            var selectedNaicsDescs = GetSelected(NaicsDescItems);
+            if (selectedNaicsDescs.Count > 0)
+                query = query.Where(l => selectedNaicsDescs.Contains(l.NaicsDescription ?? string.Empty));
+
+            // 9. Status Filter (OR within selected statuses)
+            var selectedStatuses = GetSelected(StatusItems);
+            if (selectedStatuses.Count > 0)
+                query = query.Where(l => selectedStatuses.Contains(l.Status ?? string.Empty));
 
             FilteredLeads = new ObservableCollection<LeadModel>(query);
             OnPropertyChanged(nameof(FilteredCount));
             OnPropertyChanged(nameof(TotalCount));
             OnPropertyChanged(nameof(ShowingCountText));
+            OnPropertyChanged(nameof(HasActiveFilters));
+            OnPropertyChanged(nameof(ExportFilteredButtonText));
+            OnPropertyChanged(nameof(ExportAllButtonText));
 
-            // Select first lead by default if current selection is not in filtered list
+            // Keep selected lead if still in filtered list
             if (SelectedLead == null || !FilteredLeads.Contains(SelectedLead))
             {
                 SelectedLead = FilteredLeads.FirstOrDefault();
@@ -245,57 +288,86 @@ namespace LeadManagement.Desktop.ViewModels
 
         private void PopulateFilterLists()
         {
-            // Populate Distinct Cities
-            var currentCity = SelectedCity;
-            Cities.Clear();
-            Cities.Add("All Cities");
-            foreach (var city in _allLeadsMaster.Select(l => l.City).Where(c => !string.IsNullOrWhiteSpace(c)).Distinct().OrderBy(c => c))
+            // Helper: build FilterItem list, subscribe, and load into collection
+            void Populate(ObservableCollection<FilterItem> collection, IEnumerable<string> values)
             {
-                Cities.Add(city);
+                collection.Clear();
+                foreach (var val in values.Where(v => !string.IsNullOrWhiteSpace(v)).Distinct().OrderBy(v => v))
+                {
+                    collection.Add(new FilterItem { Name = val });
+                }
+                SubscribeToItems(collection);
             }
-            if (Cities.Contains(currentCity)) SelectedCity = currentCity;
 
-            // Populate Distinct Industries (SIC Descriptions)
-            var currentInd = SelectedIndustry;
-            Industries.Clear();
-            Industries.Add("All Industries");
-            foreach (var ind in _allLeadsMaster.Select(l => l.SicDescription).Where(i => !string.IsNullOrWhiteSpace(i)).Distinct().OrderBy(i => i))
-            {
-                Industries.Add(ind);
-            }
-            if (Industries.Contains(currentInd)) SelectedIndustry = currentInd;
+            // 1. Cities
+            Populate(CityItems, _allLeadsMaster.Select(l => l.City!));
 
-            // Populate Statuses
-            var currentStat = SelectedStatus;
-            Statuses.Clear();
-            Statuses.Add("All Statuses");
-            Statuses.Add("New Lead");
-            Statuses.Add("Qualified");
-            Statuses.Add("Follow-up");
-            Statuses.Add("Contacted");
-            foreach (var s in _allLeadsMaster.Select(l => l.Status).Where(st => !string.IsNullOrWhiteSpace(st)).Distinct())
-            {
-                if (!Statuses.Contains(s)) Statuses.Add(s);
-            }
-            if (Statuses.Contains(currentStat)) SelectedStatus = currentStat;
+            // 2. Counties
+            Populate(CountyItems, _allLeadsMaster.Select(l => l.County!));
+
+            // 3. States
+            Populate(StateItems, _allLeadsMaster.Select(l => l.State!));
+
+            // 4. Industries (SIC Descriptions)
+            Populate(IndustryItems, _allLeadsMaster.Select(l => l.SicDescription!));
+
+            // 5. Annual Sales
+            Populate(AnnualSalesItems, _allLeadsMaster.Select(l => l.AnnualSales!));
+
+            // 6. NAICS Codes
+            Populate(NaicsCodeItems, _allLeadsMaster.Select(l => l.NaicsCode!));
+
+            // 7. NAICS Descriptions
+            Populate(NaicsDescItems, _allLeadsMaster.Select(l => l.NaicsDescription!));
+
+            // 8. Statuses (seed known values first, then add any from data)
+            var knownStatuses = new[] { "New Lead", "Qualified", "Follow-up", "Contacted" };
+            var dataStatuses = _allLeadsMaster.Select(l => l.Status ?? string.Empty)
+                                              .Where(s => !string.IsNullOrWhiteSpace(s))
+                                              .Distinct();
+            var allStatuses = knownStatuses.Union(dataStatuses, StringComparer.OrdinalIgnoreCase)
+                                           .OrderBy(s => s);
+            StatusItems.Clear();
+            foreach (var s in allStatuses)
+                StatusItems.Add(new FilterItem { Name = s });
+            SubscribeToItems(StatusItems);
         }
 
         /// <summary>
-        /// Exports all currently filtered leads to a genuine Excel (.xlsx) workbook with bold headers.
+        /// Exports only the currently filtered leads to an Excel workbook.
         /// </summary>
-        private void ExecuteExport()
+        private void ExecuteExportFiltered()
         {
             var leadsToExport = FilteredLeads.ToList();
+            var title = HasActiveFilters ? "Filtered Leads" : "Lead Masterlist";
+            var filePrefix = HasActiveFilters ? "Filtered_Leads" : "Lead_Masterlist";
+            ExportLeadsToExcel(leadsToExport, filePrefix, title);
+        }
+
+        /// <summary>
+        /// Exports all leads in the database without any active filters applied.
+        /// </summary>
+        private void ExecuteExportAll()
+        {
+            var leadsToExport = _allLeadsMaster.ToList();
+            ExportLeadsToExcel(leadsToExport, "All_Leads_Masterlist", "Complete Lead Masterlist");
+        }
+
+        /// <summary>
+        /// Shared Excel exporter using ClosedXML with formatted headers and auto-adjusted columns.
+        /// </summary>
+        private void ExportLeadsToExcel(List<LeadModel> leadsToExport, string filePrefix, string sheetTitle)
+        {
             if (leadsToExport.Count == 0)
             {
-                MessageBox.Show("There are no leads in the table to export.", "Export Leads", MessageBoxButton.OK, MessageBoxImage.Information);
+                MessageBox.Show("There are no leads matching your selection to export.", "Export Leads", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
 
             var dialog = new SaveFileDialog
             {
-                Title = "Export Leads to Excel",
-                FileName = $"Leads_Export_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx",
+                Title = $"Export {sheetTitle} to Excel",
+                FileName = $"{filePrefix}_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx",
                 Filter = "Excel Workbook (*.xlsx)|*.xlsx"
             };
 
@@ -304,7 +376,7 @@ namespace LeadManagement.Desktop.ViewModels
                 try
                 {
                     using var workbook = new XLWorkbook();
-                    var worksheet = workbook.Worksheets.Add("Lead Masterlist");
+                    var worksheet = workbook.Worksheets.Add("Leads");
 
                     // 1. Column Header Names (All 18 table columns + batch metadata)
                     string[] headers = new[]
@@ -330,7 +402,7 @@ namespace LeadManagement.Desktop.ViewModels
                         "BATCH NAME"
                     };
 
-                    // Format Header Row: Bold text, dark background, centered, and padded height
+                    // Format Header Row: Bold text, dark navy background, centered
                     for (int i = 0; i < headers.Length; i++)
                     {
                         var cell = worksheet.Cell(1, i + 1);
@@ -382,7 +454,7 @@ namespace LeadManagement.Desktop.ViewModels
                     workbook.SaveAs(dialog.FileName);
 
                     MessageBox.Show(
-                        $"Successfully exported {leadsToExport.Count} leads to Excel!\n\nSaved to: {dialog.FileName}",
+                        $"Successfully exported {leadsToExport.Count:N0} leads to Excel!\n\nSaved to: {dialog.FileName}",
                         "Export Complete",
                         MessageBoxButton.OK,
                         MessageBoxImage.Information);
