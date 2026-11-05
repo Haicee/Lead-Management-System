@@ -31,11 +31,17 @@ class LeadController
      */
     public function import(array $input): void
     {
+        @ini_set('memory_limit', '1024M');
+        @set_time_limit(300);
+
+        $batchId = !empty($input['batch_id']) ? (int) $input['batch_id'] : null;
         $batchName = trim($input['batch_name'] ?? '');
         $fileName = trim($input['file_name'] ?? '');
         $initialStatus = trim($input['initial_status'] ?? 'New Lead');
         $userId = !empty($input['user_id']) ? (int) $input['user_id'] : null;
         $leads = $input['leads'] ?? [];
+        $totalLeads = isset($input['total_leads']) ? (int) $input['total_leads'] : count($leads);
+        $isLastChunk = !empty($input['is_last_chunk']);
 
         if (empty($batchName)) {
             $batchName = 'Batch_' . date('Ymd_His');
@@ -49,69 +55,90 @@ class LeadController
             Response::error('No lead records provided for import.', 422);
         }
 
-        $totalLeads = count($leads);
-
         try {
             $this->db->beginTransaction();
 
-            // 1. Create the Import Batch Audit Record
-            $stmtBatch = $this->db->prepare("
-                INSERT INTO `import_batches` 
-                (`batch_name`, `file_name`, `total_leads`, `initial_status`, `imported_by`) 
-                VALUES (?, ?, ?, ?, ?)
-            ");
-            $stmtBatch->execute([$batchName, $fileName, $totalLeads, $initialStatus, $userId]);
-            $batchId = (int) $this->db->lastInsertId();
+            // 1. Create the Batch record on first chunk (if batch_id not provided)
+            if (empty($batchId)) {
+                $stmtBatch = $this->db->prepare("
+                    INSERT INTO `import_batches` 
+                    (`batch_name`, `file_name`, `total_leads`, `initial_status`, `imported_by`) 
+                    VALUES (?, ?, ?, ?, ?)
+                ");
+                $stmtBatch->execute([$batchName, $fileName, $totalLeads, $initialStatus, $userId]);
+                $batchId = (int) $this->db->lastInsertId();
+            } else {
+                // If batch already exists, retrieve existing batch name if not passed
+                if (empty($batchName)) {
+                    $stmtGetBatch = $this->db->prepare("SELECT `batch_name` FROM `import_batches` WHERE `id` = ?");
+                    $stmtGetBatch->execute([$batchId]);
+                    $batchName = $stmtGetBatch->fetchColumn() ?: 'Batch_' . $batchId;
+                }
+            }
 
-            // 2. Prepare the Lead Insert Statement
-            $stmtLead = $this->db->prepare("
-                INSERT INTO `leads` (
+            // 2. High-performance Multi-Row Insert in chunks of 250
+            $chunkSize = 250;
+            $leadChunks = array_chunk($leads, $chunkSize);
+            $inserted = 0;
+
+            foreach ($leadChunks as $chunk) {
+                $placeholders = [];
+                $values = [];
+
+                foreach ($chunk as $lead) {
+                    $placeholders[] = "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                    $status = !empty($lead['status']) ? $lead['status'] : $initialStatus;
+                    $businessName = trim($lead['business_name'] ?? '');
+
+                    if (empty($businessName)) {
+                        $businessName = 'Unnamed Lead #' . ($inserted + 1);
+                    }
+
+                    array_push(
+                        $values,
+                        $batchId,
+                        $batchName,
+                        $status,
+                        $businessName,
+                        trim($lead['address'] ?? ''),
+                        trim($lead['city'] ?? ''),
+                        trim($lead['county'] ?? ''),
+                        trim($lead['state'] ?? 'NE'),
+                        trim($lead['zip_code'] ?? ''),
+                        trim($lead['cell_number'] ?? ''),
+                        trim($lead['fax'] ?? ''),
+                        trim($lead['annual_sales'] ?? 'Less than 500,000'),
+                        trim($lead['number_of_employees'] ?? '1 to 4'),
+                        trim($lead['title'] ?? ''),
+                        trim($lead['contact_name'] ?? ''),
+                        trim($lead['website'] ?? ''),
+                        trim($lead['sic_code'] ?? ''),
+                        trim($lead['sic_description'] ?? ''),
+                        trim($lead['naics_code'] ?? ''),
+                        trim($lead['naics_description'] ?? '')
+                    );
+                    $inserted++;
+                }
+
+                $sql = "INSERT INTO `leads` (
                     `batch_id`, `batch_name`, `status`, `business_name`, `address`, 
                     `city`, `county`, `state`, `zip_code`, `cell_number`, 
                     `fax`, `annual_sales`, `number_of_employees`, `title`, `contact_name`, 
                     `website`, `sic_code`, `sic_description`, `naics_code`, `naics_description`
-                ) VALUES (
-                    ?, ?, ?, ?, ?, 
-                    ?, ?, ?, ?, ?, 
-                    ?, ?, ?, ?, ?, 
-                    ?, ?, ?, ?, ?
-                )
-            ");
+                ) VALUES " . implode(', ', $placeholders);
 
-            // 3. Insert each lead
-            $inserted = 0;
-            foreach ($leads as $lead) {
-                $status = !empty($lead['status']) ? $lead['status'] : $initialStatus;
-                $businessName = trim($lead['business_name'] ?? '');
+                $stmtBulk = $this->db->prepare($sql);
+                $stmtBulk->execute($values);
+            }
 
-                // Fallback if business name empty
-                if (empty($businessName)) {
-                    $businessName = 'Unnamed Lead #' . ($inserted + 1);
-                }
+            // 3. If last chunk or single import, update batch total with exact count
+            if ($isLastChunk || empty($input['batch_id'])) {
+                $stmtCount = $this->db->prepare("SELECT COUNT(*) FROM `leads` WHERE `batch_id` = ?");
+                $stmtCount->execute([$batchId]);
+                $finalCount = (int) $stmtCount->fetchColumn();
 
-                $stmtLead->execute([
-                    $batchId,
-                    $batchName,
-                    $status,
-                    $businessName,
-                    trim($lead['address'] ?? ''),
-                    trim($lead['city'] ?? ''),
-                    trim($lead['county'] ?? ''),
-                    trim($lead['state'] ?? 'NE'),
-                    trim($lead['zip_code'] ?? ''),
-                    trim($lead['cell_number'] ?? ''),
-                    trim($lead['fax'] ?? ''),
-                    trim($lead['annual_sales'] ?? 'Less than 500,000'),
-                    trim($lead['number_of_employees'] ?? '1 to 4'),
-                    trim($lead['title'] ?? ''),
-                    trim($lead['contact_name'] ?? ''),
-                    trim($lead['website'] ?? ''),
-                    trim($lead['sic_code'] ?? ''),
-                    trim($lead['sic_description'] ?? ''),
-                    trim($lead['naics_code'] ?? ''),
-                    trim($lead['naics_description'] ?? '')
-                ]);
-                $inserted++;
+                $stmtUpdate = $this->db->prepare("UPDATE `import_batches` SET `total_leads` = ? WHERE `id` = ?");
+                $stmtUpdate->execute([$finalCount, $batchId]);
             }
 
             $this->db->commit();
@@ -120,7 +147,8 @@ class LeadController
                 'batch_id'       => $batchId,
                 'batch_name'     => $batchName,
                 'inserted_count' => $inserted,
-                'total_leads'    => $totalLeads
+                'total_leads'    => $totalLeads,
+                'is_last_chunk'  => $isLastChunk
             ], "Successfully imported {$inserted} leads into the database.", 201);
 
         } catch (Exception $e) {

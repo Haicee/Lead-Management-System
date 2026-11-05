@@ -511,8 +511,6 @@
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
 
-                        
-
                         <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                             <Button Content="✕ Cancel" 
                                     Command="{Binding ClearFileCommand}" 
@@ -533,6 +531,142 @@
                 </Border>
             </Grid>
         </Border>
+
+        <!-- ======================================================== -->
+        <!-- MODAL OVERLAY: Reading Spreadsheet Progress & Cancel     -->
+        <!-- ======================================================== -->
+        <Grid Grid.Row="0" Grid.RowSpan="4"
+              Background="#770F172A"
+              Margin="-24,-20,-24,-20"
+              Visibility="{Binding IsParsingModalOpen, Converter={StaticResource BooleanToVisibilityConverter}}"
+              Panel.ZIndex="1000">
+            <Border Background="White"
+                    CornerRadius="14"
+                    Width="480"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Padding="28,24"
+                    BorderBrush="#E2E8F0"
+                    BorderThickness="1">
+                <Border.Effect>
+                    <DropShadowEffect BlurRadius="30" ShadowDepth="6" Opacity="0.3" Color="#000000" />
+                </Border.Effect>
+                <StackPanel>
+                    <!-- Header Icon & Title -->
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,14" VerticalAlignment="Center">
+                        <Border Background="#EFF6FF" CornerRadius="10" Width="44" Height="44" Margin="0,0,14,0">
+                            <TextBlock Text="📄" FontSize="22" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Text="{Binding ParsingModalTitle}"
+                                       FontSize="16"
+                                       FontWeight="Bold"
+                                       Foreground="{StaticResource TextPrimaryBrush}" />
+                            <TextBlock Text="{Binding FileName}"
+                                       FontSize="12.5"
+                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                       TextTrimming="CharacterEllipsis"
+                                       MaxWidth="380"
+                                       Margin="0,2,0,0" />
+                        </StackPanel>
+                    </StackPanel>
+
+                    <!-- Status description message -->
+                    <TextBlock Text="{Binding ParsingModalStatus}"
+                               FontSize="13"
+                               Foreground="#334155"
+                               Margin="0,4,0,12" />
+
+                    <!-- Progress Bar -->
+                    <ProgressBar Height="8"
+                                 IsIndeterminate="{Binding IsParsingIndeterminate}"
+                                 Value="{Binding ParsingProgressPercentage}"
+                                 Maximum="100"
+                                 Foreground="#2563EB"
+                                 Background="#E2E8F0"
+                                 BorderThickness="0"
+                                 Margin="0,0,0,20" />
+
+                    <!-- Action Footer with Cancel Button -->
+                    <Button Content="✕ Cancel Import"
+                            Command="{Binding CancelParseCommand}"
+                            Style="{StaticResource SecondaryButtonStyle}"
+                            HorizontalAlignment="Right"
+                            Padding="20,8"
+                            FontWeight="SemiBold"
+                            Cursor="Hand"
+                            ToolTip="Stop reading this spreadsheet" />
+                </StackPanel>
+            </Border>
+        </Grid>
+
+        <!-- ======================================================== -->
+        <!-- MODAL OVERLAY: Committing to Database Progress & Cancel  -->
+        <!-- ======================================================== -->
+        <Grid Grid.Row="0" Grid.RowSpan="4"
+              Background="#770F172A"
+              Margin="-24,-20,-24,-20"
+              Visibility="{Binding IsCommittingModalOpen, Converter={StaticResource BooleanToVisibilityConverter}}"
+              Panel.ZIndex="1000">
+            <Border Background="White"
+                    CornerRadius="14"
+                    Width="500"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Padding="28,24"
+                    BorderBrush="#E2E8F0"
+                    BorderThickness="1">
+                <Border.Effect>
+                    <DropShadowEffect BlurRadius="30" ShadowDepth="6" Opacity="0.3" Color="#000000" />
+                </Border.Effect>
+                <StackPanel>
+                    <!-- Header Icon & Title -->
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,14" VerticalAlignment="Center">
+                        <Border Background="#ECFDF5" CornerRadius="10" Width="44" Height="44" Margin="0,0,14,0">
+                            <TextBlock Text="💾" FontSize="22" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Text="{Binding CommitModalTitle}"
+                                       FontSize="16"
+                                       FontWeight="Bold"
+                                       Foreground="{StaticResource TextPrimaryBrush}" />
+                            <TextBlock Text="{Binding BatchName, StringFormat='Batch: {0}'}"
+                                       FontSize="12.5"
+                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                       TextTrimming="CharacterEllipsis"
+                                       MaxWidth="400"
+                                       Margin="0,2,0,0" />
+                        </StackPanel>
+                    </StackPanel>
+
+                    <!-- Status description message -->
+                    <TextBlock Text="{Binding CommitModalStatus}"
+                               FontSize="13"
+                               Foreground="#334155"
+                               Margin="0,4,0,12" />
+
+                    <!-- Progress Bar -->
+                    <ProgressBar Height="8"
+                                 IsIndeterminate="{Binding IsCommittingIndeterminate}"
+                                 Value="{Binding CommitProgressPercentage}"
+                                 Maximum="100"
+                                 Foreground="#10B981"
+                                 Background="#E2E8F0"
+                                 BorderThickness="0"
+                                 Margin="0,0,0,20" />
+
+                    <!-- Action Footer with Cancel Button -->
+                    <Button Content="✕ Cancel Commit"
+                            Command="{Binding CancelCommitCommand}"
+                            Style="{StaticResource SecondaryButtonStyle}"
+                            HorizontalAlignment="Right"
+                            Padding="20,8"
+                            FontWeight="SemiBold"
+                            Cursor="Hand"
+                            ToolTip="Stop committing further leads to database" />
+                </StackPanel>
+            </Border>
+        </Grid>
 
     </Grid>
 </UserControl>

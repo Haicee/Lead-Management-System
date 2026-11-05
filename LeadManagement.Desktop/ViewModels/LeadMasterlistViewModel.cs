@@ -27,6 +27,11 @@ namespace LeadManagement.Desktop.ViewModels
             ExportFilteredCommand = new RelayCommand(ExecuteExportFiltered);
             ExportAllCommand = new RelayCommand(ExecuteExportAll);
             ExportCommand = new RelayCommand(ExecuteExportFiltered); // Default export action
+            CancelExportCommand = new RelayCommand(() =>
+            {
+                _exportCts?.Cancel();
+                ExportModalStatus = "Cancelling export...";
+            });
 
             // Fetch real leads from MySQL database on startup
             _ = LoadLeadsAsync();
@@ -121,11 +126,57 @@ namespace LeadManagement.Desktop.ViewModels
 
         public string ExportAllButtonText => $"⤓ Export All";
 
+        // ─── Export Loading Modal State Properties ───
+        private bool _isExportModalOpen = false;
+        private string _exportModalTitle = "Exporting Leads to Excel...";
+        private string _exportModalSubtitle = string.Empty;
+        private string _exportModalStatus = "Preparing data...";
+        private double _exportProgressPercentage = 0;
+        private bool _isExportIndeterminate = true;
+        private System.Threading.CancellationTokenSource? _exportCts;
+
+        public bool IsExportModalOpen
+        {
+            get => _isExportModalOpen;
+            set => SetProperty(ref _isExportModalOpen, value);
+        }
+
+        public string ExportModalTitle
+        {
+            get => _exportModalTitle;
+            set => SetProperty(ref _exportModalTitle, value);
+        }
+
+        public string ExportModalSubtitle
+        {
+            get => _exportModalSubtitle;
+            set => SetProperty(ref _exportModalSubtitle, value);
+        }
+
+        public string ExportModalStatus
+        {
+            get => _exportModalStatus;
+            set => SetProperty(ref _exportModalStatus, value);
+        }
+
+        public double ExportProgressPercentage
+        {
+            get => _exportProgressPercentage;
+            set => SetProperty(ref _exportProgressPercentage, value);
+        }
+
+        public bool IsExportIndeterminate
+        {
+            get => _isExportIndeterminate;
+            set => SetProperty(ref _isExportIndeterminate, value);
+        }
+
         public ICommand ClearFiltersCommand { get; }
         public ICommand RefreshCommand { get; }
         public ICommand ExportFilteredCommand { get; }
         public ICommand ExportAllCommand { get; }
         public ICommand ExportCommand { get; }
+        public ICommand CancelExportCommand { get; }
 
         // ─── Helper: Extract selected names as a HashSet for fast OR matching ─────
 
@@ -334,29 +385,29 @@ namespace LeadManagement.Desktop.ViewModels
         }
 
         /// <summary>
-        /// Exports only the currently filtered leads to an Excel workbook.
+        /// Exports only the currently filtered leads to an Excel workbook with a loading modal and cancel support.
         /// </summary>
-        private void ExecuteExportFiltered()
+        private async void ExecuteExportFiltered()
         {
             var leadsToExport = FilteredLeads.ToList();
             var title = HasActiveFilters ? "Filtered Leads" : "Lead Masterlist";
             var filePrefix = HasActiveFilters ? "Filtered_Leads" : "Lead_Masterlist";
-            ExportLeadsToExcel(leadsToExport, filePrefix, title);
+            await ExportLeadsToExcelAsync(leadsToExport, filePrefix, title);
         }
 
         /// <summary>
-        /// Exports all leads in the database without any active filters applied.
+        /// Exports all leads in the database without any active filters applied with a loading modal and cancel support.
         /// </summary>
-        private void ExecuteExportAll()
+        private async void ExecuteExportAll()
         {
             var leadsToExport = _allLeadsMaster.ToList();
-            ExportLeadsToExcel(leadsToExport, "All_Leads_Masterlist", "Complete Lead Masterlist");
+            await ExportLeadsToExcelAsync(leadsToExport, "All_Leads_Masterlist", "Complete Lead Masterlist");
         }
 
         /// <summary>
-        /// Shared Excel exporter using ClosedXML with formatted headers and auto-adjusted columns.
+        /// Shared Excel exporter using ClosedXML running in the background with a modal progress dialog.
         /// </summary>
-        private void ExportLeadsToExcel(List<LeadModel> leadsToExport, string filePrefix, string sheetTitle)
+        private async Task ExportLeadsToExcelAsync(List<LeadModel> leadsToExport, string filePrefix, string sheetTitle)
         {
             if (leadsToExport.Count == 0)
             {
@@ -371,10 +422,33 @@ namespace LeadManagement.Desktop.ViewModels
                 Filter = "Excel Workbook (*.xlsx)|*.xlsx"
             };
 
-            if (dialog.ShowDialog() == true)
+            if (dialog.ShowDialog() != true) return;
+
+            string savePath = dialog.FileName;
+
+            _exportCts?.Dispose();
+            _exportCts = new System.Threading.CancellationTokenSource();
+            var token = _exportCts.Token;
+
+            IsExportModalOpen = true;
+            ExportModalTitle = $"Exporting {sheetTitle} to Excel...";
+            ExportModalSubtitle = $"{System.IO.Path.GetFileName(savePath)} • {leadsToExport.Count:N0} Leads";
+            ExportModalStatus = "Initializing Excel workbook...";
+            ExportProgressPercentage = 0;
+            IsExportIndeterminate = true;
+
+            try
             {
-                try
+                var progress = new Progress<(int written, int total, double pct, string msg)>(p =>
                 {
+                    IsExportIndeterminate = p.total <= 0;
+                    ExportProgressPercentage = p.pct;
+                    ExportModalStatus = p.msg;
+                });
+
+                await Task.Run(() =>
+                {
+                    token.ThrowIfCancellationRequested();
                     using var workbook = new XLWorkbook();
                     var worksheet = workbook.Worksheets.Add("Leads");
 
@@ -416,9 +490,20 @@ namespace LeadManagement.Desktop.ViewModels
                     worksheet.Row(1).Height = 26;
 
                     // 2. Data Rows
+                    int total = leadsToExport.Count;
                     int row = 2;
+                    int counter = 0;
+
                     foreach (var lead in leadsToExport)
                     {
+                        counter++;
+                        if (counter % 1000 == 0)
+                        {
+                            token.ThrowIfCancellationRequested();
+                            double pct = (double)counter / total * 100.0;
+                            ((IProgress<(int, int, double, string)>)progress).Report((counter, total, pct, $"Writing rows: {counter:N0} of {total:N0} ({pct:F1}%)..."));
+                        }
+
                         worksheet.Cell(row, 1).SetValue(lead.Status);
                         worksheet.Cell(row, 2).SetValue(lead.BusinessName);
                         worksheet.Cell(row, 3).SetValue(lead.Address);
@@ -448,25 +533,40 @@ namespace LeadManagement.Desktop.ViewModels
                         row++;
                     }
 
+                    token.ThrowIfCancellationRequested();
+                    ((IProgress<(int, int, double, string)>)progress).Report((total, total, 98.0, "Auto-adjusting column widths and saving..."));
+
                     // Auto-fit all column widths based on contents
                     worksheet.Columns().AdjustToContents();
 
-                    workbook.SaveAs(dialog.FileName);
+                    workbook.SaveAs(savePath);
+                }, token);
 
-                    MessageBox.Show(
-                        $"Successfully exported {leadsToExport.Count:N0} leads to Excel!\n\nSaved to: {dialog.FileName}",
-                        "Export Complete",
-                        MessageBoxButton.OK,
-                        MessageBoxImage.Information);
-                }
-                catch (Exception ex)
+                MessageBox.Show(
+                    $"Successfully exported {leadsToExport.Count:N0} leads to Excel!\n\nSaved to: {savePath}",
+                    "Export Complete",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
+            }
+            catch (OperationCanceledException)
+            {
+                if (System.IO.File.Exists(savePath))
                 {
-                    MessageBox.Show(
-                        $"Failed to export leads: {ex.Message}",
-                        "Export Error",
-                        MessageBoxButton.OK,
-                        MessageBoxImage.Error);
+                    try { System.IO.File.Delete(savePath); } catch { }
                 }
+                MessageBox.Show("Export was cancelled by user.", "Export Cancelled", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    $"Failed to export leads: {ex.Message}",
+                    "Export Error",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+            }
+            finally
+            {
+                IsExportModalOpen = false;
             }
         }
     }

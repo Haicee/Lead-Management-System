@@ -220,6 +220,7 @@
                       VirtualizingPanel.IsVirtualizing="True"
                       VirtualizingPanel.VirtualizationMode="Recycling"
                       GridLinesVisibility="None"
+                      ClipboardCopyMode="ExcludeHeader"
                       VerticalScrollBarVisibility="Auto"
                       HorizontalScrollBarVisibility="Auto">
                 <DataGrid.Columns>
@@ -249,9 +250,11 @@
                                             </Style.Triggers>
                                         </Style>
                                     </Border.Style>
-                                    <TextBlock Text="{Binding Status}" FontSize="11" FontWeight="SemiBold">
-                                        <TextBlock.Style>
-                                            <Style TargetType="TextBlock">
+                                    <TextBox Text="{Binding Status, Mode=OneWay}" 
+                                             FontSize="11" 
+                                             FontWeight="SemiBold">
+                                        <TextBox.Style>
+                                            <Style TargetType="TextBox" BasedOn="{StaticResource SelectableTextStyle}">
                                                 <Setter Property="Foreground" Value="#1D4ED8" />
                                                 <Style.Triggers>
                                                     <DataTrigger Binding="{Binding Status}" Value="Qualified">
@@ -265,8 +268,8 @@
                                                     </DataTrigger>
                                                 </Style.Triggers>
                                             </Style>
-                                        </TextBlock.Style>
-                                    </TextBlock>
+                                        </TextBox.Style>
+                                    </TextBox>
                                 </Border>
                             </DataTemplate>
                         </DataGridTemplateColumn.CellTemplate>
@@ -276,44 +279,68 @@
                     <DataGridTemplateColumn Header="BUSINESS NAME" Width="220" CanUserSort="True" SortMemberPath="BusinessName">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
-                                <TextBlock Text="{Binding BusinessName}" 
-                                           FontWeight="SemiBold" 
-                                           Foreground="{StaticResource TextPrimaryBrush}" 
-                                           FontSize="12.5" 
-                                           VerticalAlignment="Center" />
+                                <TextBox Text="{Binding BusinessName, Mode=OneWay}" 
+                                         Style="{StaticResource SelectableTextStyle}"
+                                         FontWeight="SemiBold" 
+                                         VerticalAlignment="Center" />
                             </DataTemplate>
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
 
                     <!-- Column B: Address -->
-                    <DataGridTextColumn Header="ADDRESS" 
-                                        Binding="{Binding Address}" 
-                                        Width="190" 
-                                        CanUserSort="True" />
+                    <DataGridTemplateColumn Header="ADDRESS" Width="190" CanUserSort="True" SortMemberPath="Address">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <TextBox Text="{Binding Address, Mode=OneWay}" 
+                                         Style="{StaticResource SelectableTextStyle}" 
+                                         VerticalAlignment="Center" />
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
 
                     <!-- Column C: City -->
-                    <DataGridTextColumn Header="CITY" 
-                                        Binding="{Binding City}" 
-                                        Width="125" 
-                                        CanUserSort="True" />
+                    <DataGridTemplateColumn Header="CITY" Width="125" CanUserSort="True" SortMemberPath="City">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <TextBox Text="{Binding City, Mode=OneWay}" 
+                                         Style="{StaticResource SelectableTextStyle}" 
+                                         VerticalAlignment="Center" />
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
 
                     <!-- Column D: County -->
-                    <DataGridTextColumn Header="COUNTY" 
-                                        Binding="{Binding County}" 
-                                        Width="125" 
-                                        CanUserSort="True" />
+                    <DataGridTemplateColumn Header="COUNTY" Width="125" CanUserSort="True" SortMemberPath="County">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <TextBox Text="{Binding County, Mode=OneWay}" 
+                                         Style="{StaticResource SelectableTextStyle}" 
+                                         VerticalAlignment="Center" />
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
 
                     <!-- Column E: State -->
-                    <DataGridTextColumn Header="STATE" 
-                                        Binding="{Binding State}" 
-                                        Width="75" 
-                                        CanUserSort="True" />
+                    <DataGridTemplateColumn Header="STATE" Width="75" CanUserSort="True" SortMemberPath="State">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <TextBox Text="{Binding State, Mode=OneWay}" 
+                                         Style="{StaticResource SelectableTextStyle}" 
+                                         VerticalAlignment="Center" />
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
 
                     <!-- Column F: Zip Code -->
-                    <DataGridTextColumn Header="ZIP CODE" 
-                                        Binding="{Binding ZipCode}" 
-                                        Width="95" 
-                                        CanUserSort="True" />
+                    <DataGridTemplateColumn Header="ZIP CODE" Width="95" CanUserSort="True" SortMemberPath="ZipCode">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <TextBox Text="{Binding ZipCode, Mode=OneWay}" 
+                                         Style="{StaticResource SelectableTextStyle}" 
+                                         VerticalAlignment="Center" />
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
 
                     <!-- Column G: Cell Number -->
                     <DataGridTemplateColumn Header="CELL NUMBER" Width="140" CanUserSort="True" SortMemberPath="CellNumber">
@@ -321,56 +348,82 @@
                             <DataTemplate>
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                     <TextBlock Text="📞 " FontSize="10" Foreground="#64748B" VerticalAlignment="Center" />
-                                    <TextBlock Text="{Binding FormattedPhone}" 
-                                               FontFamily="Consolas, Segoe UI" 
-                                               Foreground="{StaticResource TextPrimaryBrush}" 
-                                               FontSize="12" 
-                                               VerticalAlignment="Center" />
+                                    <TextBox Text="{Binding FormattedPhone, Mode=OneWay}" 
+                                             Style="{StaticResource SelectableTextStyle}"
+                                             FontFamily="Consolas, Segoe UI" 
+                                             FontSize="12" 
+                                             VerticalAlignment="Center" />
                                 </StackPanel>
                             </DataTemplate>
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
 
                     <!-- Column H: FAX -->
-                    <DataGridTextColumn Header="FAX" 
-                                        Binding="{Binding Fax}" 
-                                        Width="110" 
-                                        CanUserSort="True" />
+                    <DataGridTemplateColumn Header="FAX" Width="110" CanUserSort="True" SortMemberPath="Fax">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <TextBox Text="{Binding Fax, Mode=OneWay}" 
+                                         Style="{StaticResource SelectableTextStyle}" 
+                                         VerticalAlignment="Center" />
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
 
                     <!-- Column I: Annual Sales -->
-                    <DataGridTextColumn Header="ANNUAL SALES" 
-                                        Binding="{Binding AnnualSales}" 
-                                        Width="145" 
-                                        CanUserSort="True" />
+                    <DataGridTemplateColumn Header="ANNUAL SALES" Width="145" CanUserSort="True" SortMemberPath="AnnualSales">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <TextBox Text="{Binding AnnualSales, Mode=OneWay}" 
+                                         Style="{StaticResource SelectableTextStyle}" 
+                                         VerticalAlignment="Center" />
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
 
                     <!-- Column J: Number Of Employee -->
-                    <DataGridTextColumn Header="NUMBER OF EMPLOYEE" 
-                                        Binding="{Binding NumberOfEmployees}" 
-                                        Width="165" 
-                                        CanUserSort="True" />
+                    <DataGridTemplateColumn Header="NUMBER OF EMPLOYEE" Width="165" CanUserSort="True" SortMemberPath="NumberOfEmployees">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <TextBox Text="{Binding NumberOfEmployees, Mode=OneWay}" 
+                                         Style="{StaticResource SelectableTextStyle}" 
+                                         VerticalAlignment="Center" />
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
 
                     <!-- Column K: Title -->
-                    <DataGridTextColumn Header="TITLE" 
-                                        Binding="{Binding Title}" 
-                                        Width="150" 
-                                        CanUserSort="True" />
+                    <DataGridTemplateColumn Header="TITLE" Width="150" CanUserSort="True" SortMemberPath="Title">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <TextBox Text="{Binding Title, Mode=OneWay}" 
+                                         Style="{StaticResource SelectableTextStyle}" 
+                                         VerticalAlignment="Center" />
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
 
                     <!-- Column L: Contact Name -->
-                    <DataGridTextColumn Header="CONTACT NAME" 
-                                        Binding="{Binding ContactName}" 
-                                        Width="180" 
-                                        CanUserSort="True" />
+                    <DataGridTemplateColumn Header="CONTACT NAME" Width="180" CanUserSort="True" SortMemberPath="ContactName">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <TextBox Text="{Binding ContactName, Mode=OneWay}" 
+                                         Style="{StaticResource SelectableTextStyle}" 
+                                         VerticalAlignment="Center" />
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
 
                     <!-- Column M: Website -->
                     <DataGridTemplateColumn Header="WEBSITE" Width="160" CanUserSort="True" SortMemberPath="Website">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
                                 <Grid VerticalAlignment="Center">
-                                    <TextBlock x:Name="LinkBlock" FontSize="12" TextTrimming="CharacterEllipsis">
-                                        <Hyperlink Foreground="#2563EB" TextDecorations="None">
-                                            <Run Text="{Binding Website}" />
-                                        </Hyperlink>
-                                    </TextBlock>
+                                    <TextBox x:Name="LinkBlock"
+                                             Text="{Binding Website, Mode=OneWay}"
+                                             Style="{StaticResource SelectableTextStyle}"
+                                             Foreground="#2563EB"
+                                             FontSize="12"
+                                             VerticalAlignment="Center" />
                                     <TextBlock x:Name="DashBlock" Text="—" Foreground="#94A3B8" FontSize="12" Visibility="Collapsed" />
                                 </Grid>
                                 <DataTemplate.Triggers>
@@ -388,33 +441,125 @@
                     </DataGridTemplateColumn>
 
                     <!-- Column N: SIC Code -->
-                    <DataGridTextColumn Header="SIC CODE" 
-                                        Binding="{Binding SicCode}" 
-                                        Width="110" 
-                                        CanUserSort="True" />
+                    <DataGridTemplateColumn Header="SIC CODE" Width="110" CanUserSort="True" SortMemberPath="SicCode">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <TextBox Text="{Binding SicCode, Mode=OneWay}" 
+                                         Style="{StaticResource SelectableTextStyle}" 
+                                         VerticalAlignment="Center" />
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
 
                     <!-- Column O: SIC Description -->
-                    <DataGridTextColumn Header="SIC DESCRIPTION" 
-                                        Binding="{Binding SicDescription}" 
-                                        Width="200" 
-                                        CanUserSort="True" />
+                    <DataGridTemplateColumn Header="SIC DESCRIPTION" Width="200" CanUserSort="True" SortMemberPath="SicDescription">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <TextBox Text="{Binding SicDescription, Mode=OneWay}" 
+                                         Style="{StaticResource SelectableTextStyle}" 
+                                         VerticalAlignment="Center" />
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
 
                     <!-- Column P: NAICS Code -->
-                    <DataGridTextColumn Header="NAICS CODE" 
-                                        Binding="{Binding NaicsCode}" 
-                                        Width="110" 
-                                        CanUserSort="True" />
+                    <DataGridTemplateColumn Header="NAICS CODE" Width="110" CanUserSort="True" SortMemberPath="NaicsCode">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <TextBox Text="{Binding NaicsCode, Mode=OneWay}" 
+                                         Style="{StaticResource SelectableTextStyle}" 
+                                         VerticalAlignment="Center" />
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
 
                     <!-- Column Q: NAICS Description -->
-                    <DataGridTextColumn Header="NAICS DESCRIPTION" 
-                                        Binding="{Binding NaicsDescription}" 
-                                        Width="220" 
-                                        CanUserSort="True" />
+                    <DataGridTemplateColumn Header="NAICS DESCRIPTION" Width="220" CanUserSort="True" SortMemberPath="NaicsDescription">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <TextBox Text="{Binding NaicsDescription, Mode=OneWay}" 
+                                         Style="{StaticResource SelectableTextStyle}" 
+                                         VerticalAlignment="Center" />
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
 
                 </DataGrid.Columns>
             </DataGrid>
         </Border>
- 
+
+        <!-- ======================================================== -->
+        <!-- MODAL OVERLAY: Exporting Leads Progress & Cancel         -->
+        <!-- ======================================================== -->
+        <Grid Grid.Row="0"
+                Grid.Column="0"
+                Grid.RowSpan="3"
+                Grid.ColumnSpan="3"
+                Background="#CC000000"
+                Margin="-24,-20,-24,-20"
+                HorizontalAlignment="Stretch"
+                VerticalAlignment="Stretch"
+                Visibility="{Binding IsExportModalOpen, Converter={StaticResource BooleanToVisibilityConverter}}"
+                Panel.ZIndex="9999">
+            <Border Background="White"
+                    CornerRadius="14"
+                    Width="500"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Padding="28,24"
+                    BorderBrush="#E2E8F0"
+                    BorderThickness="1">
+                <Border.Effect>
+                    <DropShadowEffect BlurRadius="30" ShadowDepth="6" Opacity="0.3" Color="#000000" />
+                </Border.Effect>
+                <StackPanel>
+                    <!-- Header Icon & Title -->
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,14" VerticalAlignment="Center">
+                        <Border Background="#EFF6FF" CornerRadius="10" Width="44" Height="44" Margin="0,0,14,0">
+                            <TextBlock Text="📊" FontSize="22" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Text="{Binding ExportModalTitle}"
+                                       FontSize="16"
+                                       FontWeight="Bold"
+                                       Foreground="{StaticResource TextPrimaryBrush}" />
+                            <TextBlock Text="{Binding ExportModalSubtitle}"
+                                       FontSize="12.5"
+                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                       TextTrimming="CharacterEllipsis"
+                                       MaxWidth="400"
+                                       Margin="0,2,0,0" />
+                        </StackPanel>
+                    </StackPanel>
+
+                    <!-- Status description message -->
+                    <TextBlock Text="{Binding ExportModalStatus}"
+                               FontSize="13"
+                               Foreground="#334155"
+                               Margin="0,4,0,12" />
+
+                    <!-- Progress Bar -->
+                    <ProgressBar Height="8"
+                                 IsIndeterminate="{Binding IsExportIndeterminate}"
+                                 Value="{Binding ExportProgressPercentage}"
+                                 Maximum="100"
+                                 Foreground="#2563EB"
+                                 Background="#E2E8F0"
+                                 BorderThickness="0"
+                                 Margin="0,0,0,20" />
+
+                    <!-- Action Footer with Cancel Button -->
+                    <Button Content="✕ Cancel Export"
+                            Command="{Binding CancelExportCommand}"
+                            Style="{StaticResource SecondaryButtonStyle}"
+                            HorizontalAlignment="Right"
+                            Padding="20,8"
+                            FontWeight="SemiBold"
+                            Cursor="Hand"
+                            ToolTip="Cancel Excel file generation" />
+                </StackPanel>
+            </Border>
+        </Grid>
 
     </Grid>
 </UserControl>

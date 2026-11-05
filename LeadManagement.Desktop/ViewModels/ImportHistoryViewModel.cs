@@ -38,6 +38,11 @@ namespace LeadManagement.Desktop.ViewModels
             ClosePreviewCommand = new RelayCommand(ExecuteClosePreview);
             ExportBatchCommand = new RelayCommand(async (param) => await ExecuteExportBatchAsync(param));
             DeleteBatchCommand = new RelayCommand(async (param) => await ExecuteDeleteBatchAsync(param));
+            CancelExportCommand = new RelayCommand(() =>
+            {
+                _exportCts?.Cancel();
+                ExportModalStatus = "Cancelling export...";
+            });
 
             // Load batches from the database
             _ = LoadBatchesAsync();
@@ -169,6 +174,88 @@ namespace LeadManagement.Desktop.ViewModels
         public ICommand ClosePreviewCommand { get; }
         public ICommand ExportBatchCommand { get; }
         public ICommand DeleteBatchCommand { get; }
+        public ICommand CancelExportCommand { get; }
+
+        // --- Export & Delete Modal State Properties ---
+        private bool _isExportModalOpen = false;
+        private string _exportModalTitle = "Exporting Batch to Excel...";
+        private string _exportModalSubtitle = string.Empty;
+        private string _exportModalStatus = "Preparing data...";
+        private double _exportProgressPercentage = 0;
+        private bool _isExportIndeterminate = true;
+        private CancellationTokenSource? _exportCts;
+
+        private bool _isDeleteModalOpen = false;
+        private string _deleteModalTitle = "Deleting Batch...";
+        private string _deleteModalSubtitle = string.Empty;
+        private string _deleteModalStatus = "Removing batch and lead records from database...";
+        private bool _isDeleteIndeterminate = true;
+
+        public bool IsExportModalOpen
+        {
+            get => _isExportModalOpen;
+            set => SetProperty(ref _isExportModalOpen, value);
+        }
+
+        public string ExportModalTitle
+        {
+            get => _exportModalTitle;
+            set => SetProperty(ref _exportModalTitle, value);
+        }
+
+        public string ExportModalSubtitle
+        {
+            get => _exportModalSubtitle;
+            set => SetProperty(ref _exportModalSubtitle, value);
+        }
+
+        public string ExportModalStatus
+        {
+            get => _exportModalStatus;
+            set => SetProperty(ref _exportModalStatus, value);
+        }
+
+        public double ExportProgressPercentage
+        {
+            get => _exportProgressPercentage;
+            set => SetProperty(ref _exportProgressPercentage, value);
+        }
+
+        public bool IsExportIndeterminate
+        {
+            get => _isExportIndeterminate;
+            set => SetProperty(ref _isExportIndeterminate, value);
+        }
+
+        public bool IsDeleteModalOpen
+        {
+            get => _isDeleteModalOpen;
+            set => SetProperty(ref _isDeleteModalOpen, value);
+        }
+
+        public string DeleteModalTitle
+        {
+            get => _deleteModalTitle;
+            set => SetProperty(ref _deleteModalTitle, value);
+        }
+
+        public string DeleteModalSubtitle
+        {
+            get => _deleteModalSubtitle;
+            set => SetProperty(ref _deleteModalSubtitle, value);
+        }
+
+        public string DeleteModalStatus
+        {
+            get => _deleteModalStatus;
+            set => SetProperty(ref _deleteModalStatus, value);
+        }
+
+        public bool IsDeleteIndeterminate
+        {
+            get => _isDeleteIndeterminate;
+            set => SetProperty(ref _isDeleteIndeterminate, value);
+        }
 
         /// <summary>
         /// Fetches all import batches from the database.
@@ -298,30 +385,12 @@ namespace LeadManagement.Desktop.ViewModels
         }
 
         /// <summary>
-        /// Exports only the specific batch and all its leads into an Excel (.xlsx) file with bold headers.
+        /// Exports only the specific batch and all its leads into an Excel (.xlsx) file with a loading modal and cancel support.
         /// </summary>
         private async Task ExecuteExportBatchAsync(object? parameter)
         {
             var batch = parameter as ImportBatchModel ?? PreviewBatch;
             if (batch == null) return;
-
-            List<LeadModel> leadsToExport;
-
-            // If this batch is currently loaded in preview, use those leads; otherwise fetch them
-            if (PreviewBatch != null && PreviewBatch.Id == batch.Id && _allPreviewLeads.Count > 0)
-            {
-                leadsToExport = _allPreviewLeads.ToList();
-            }
-            else
-            {
-                var (success, msg, fetchedLeads) = await ApiService.Instance.GetBatchLeadsAsync(batch.Id);
-                if (!success || fetchedLeads == null || fetchedLeads.Count == 0)
-                {
-                    MessageBox.Show($"Could not retrieve leads for batch '{batch.BatchName}' to export: {msg}", "Export Batch", MessageBoxButton.OK, MessageBoxImage.Warning);
-                    return;
-                }
-                leadsToExport = fetchedLeads;
-            }
 
             // Clean filename
             string safeBatchName = string.Join("_", batch.BatchName.Split(Path.GetInvalidFileNameChars())).Trim();
@@ -334,10 +403,54 @@ namespace LeadManagement.Desktop.ViewModels
                 Filter = "Excel Workbook (*.xlsx)|*.xlsx"
             };
 
-            if (dialog.ShowDialog() == true)
+            if (dialog.ShowDialog() != true) return;
+
+            string savePath = dialog.FileName;
+
+            _exportCts?.Dispose();
+            _exportCts = new CancellationTokenSource();
+            var token = _exportCts.Token;
+
+            IsExportModalOpen = true;
+            ExportModalTitle = $"Exporting Batch '{batch.BatchName}'...";
+            ExportModalSubtitle = $"{Path.GetFileName(savePath)} • {batch.TotalLeads:N0} Leads";
+            ExportModalStatus = "Fetching leads from database...";
+            ExportProgressPercentage = 0;
+            IsExportIndeterminate = true;
+
+            try
             {
-                try
+                List<LeadModel> leadsToExport;
+
+                // If this batch is currently loaded in preview, use those leads; otherwise fetch them
+                if (PreviewBatch != null && PreviewBatch.Id == batch.Id && _allPreviewLeads.Count > 0)
                 {
+                    leadsToExport = _allPreviewLeads.ToList();
+                }
+                else
+                {
+                    var (success, msg, fetchedLeads) = await ApiService.Instance.GetBatchLeadsAsync(batch.Id);
+                    if (!success || fetchedLeads == null || fetchedLeads.Count == 0)
+                    {
+                        MessageBox.Show($"Could not retrieve leads for batch '{batch.BatchName}' to export: {msg}", "Export Batch", MessageBoxButton.OK, MessageBoxImage.Warning);
+                        return;
+                    }
+                    leadsToExport = fetchedLeads;
+                }
+
+                token.ThrowIfCancellationRequested();
+                ExportModalStatus = "Initializing Excel workbook...";
+
+                var progress = new Progress<(int written, int total, double pct, string msg)>(p =>
+                {
+                    IsExportIndeterminate = p.total <= 0;
+                    ExportProgressPercentage = p.pct;
+                    ExportModalStatus = p.msg;
+                });
+
+                await Task.Run(() =>
+                {
+                    token.ThrowIfCancellationRequested();
                     using var workbook = new XLWorkbook();
                     string safeSheetName = safeBatchName.Length > 28 ? safeBatchName.Substring(0, 28) : safeBatchName;
                     var worksheet = workbook.Worksheets.Add(safeSheetName);
@@ -380,9 +493,20 @@ namespace LeadManagement.Desktop.ViewModels
                     worksheet.Row(1).Height = 26;
 
                     // 2. Data Rows
+                    int total = leadsToExport.Count;
                     int row = 2;
+                    int counter = 0;
+
                     foreach (var lead in leadsToExport)
                     {
+                        counter++;
+                        if (counter % 1000 == 0)
+                        {
+                            token.ThrowIfCancellationRequested();
+                            double pct = (double)counter / total * 100.0;
+                            ((IProgress<(int, int, double, string)>)progress).Report((counter, total, pct, $"Writing rows: {counter:N0} of {total:N0} ({pct:F1}%)..."));
+                        }
+
                         worksheet.Cell(row, 1).SetValue(lead.Status);
                         worksheet.Cell(row, 2).SetValue(lead.BusinessName);
                         worksheet.Cell(row, 3).SetValue(lead.Address);
@@ -411,30 +535,45 @@ namespace LeadManagement.Desktop.ViewModels
                         row++;
                     }
 
+                    token.ThrowIfCancellationRequested();
+                    ((IProgress<(int, int, double, string)>)progress).Report((total, total, 98.0, "Saving workbook to disk..."));
+
                     // Auto-fit all column widths
                     worksheet.Columns().AdjustToContents();
 
-                    workbook.SaveAs(dialog.FileName);
+                    workbook.SaveAs(savePath);
+                }, token);
 
-                    MessageBox.Show(
-                        $"Successfully exported batch '{batch.BatchName}' ({leadsToExport.Count} leads) to Excel!\n\nSaved to: {dialog.FileName}",
-                        "Batch Export Complete",
-                        MessageBoxButton.OK,
-                        MessageBoxImage.Information);
-                }
-                catch (Exception ex)
+                MessageBox.Show(
+                    $"Successfully exported batch '{batch.BatchName}' ({leadsToExport.Count:N0} leads) to Excel!\n\nSaved to: {savePath}",
+                    "Batch Export Complete",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
+            }
+            catch (OperationCanceledException)
+            {
+                if (File.Exists(savePath))
                 {
-                    MessageBox.Show(
-                        $"Failed to export batch leads: {ex.Message}",
-                        "Export Error",
-                        MessageBoxButton.OK,
-                        MessageBoxImage.Error);
+                    try { File.Delete(savePath); } catch { }
                 }
+                MessageBox.Show("Export was cancelled by user.", "Export Cancelled", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    $"Failed to export batch leads: {ex.Message}",
+                    "Export Error",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+            }
+            finally
+            {
+                IsExportModalOpen = false;
             }
         }
 
         /// <summary>
-        /// Permanently deletes a batch and all of its leads from the database.
+        /// Permanently deletes a batch and all of its leads from the database with a loading modal.
         /// </summary>
         private async Task ExecuteDeleteBatchAsync(object? parameter)
         {
@@ -447,6 +586,12 @@ namespace LeadManagement.Desktop.ViewModels
                 MessageBoxImage.Warning);
 
             if (result != MessageBoxResult.Yes) return;
+
+            IsDeleteModalOpen = true;
+            DeleteModalTitle = $"Deleting Batch '{batch.BatchName}'...";
+            DeleteModalSubtitle = $"{batch.TotalLeads:N0} Leads associated with this batch";
+            DeleteModalStatus = "Removing batch and lead records from database...";
+            IsDeleteIndeterminate = true;
 
             try
             {
@@ -485,6 +630,10 @@ namespace LeadManagement.Desktop.ViewModels
                     "Delete Error",
                     MessageBoxButton.OK,
                     MessageBoxImage.Error);
+            }
+            finally
+            {
+                IsDeleteModalOpen = false;
             }
         }
     }

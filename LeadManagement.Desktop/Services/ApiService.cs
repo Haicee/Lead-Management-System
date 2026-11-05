@@ -34,7 +34,7 @@ namespace LeadManagement.Desktop.Services
             _httpClient = new HttpClient
             {
                 BaseAddress = new Uri(BaseUrl + "/"),
-                Timeout = TimeSpan.FromSeconds(15)
+                Timeout = TimeSpan.FromMinutes(5)
             };
             _httpClient.DefaultRequestHeaders.Add("Accept", "application/json");
         }
@@ -90,47 +90,128 @@ namespace LeadManagement.Desktop.Services
         }
 
         /// <summary>
-        /// Sends a batch of lead records to the backend database via POST /leads/import.
+        /// Sends lead records to the backend database via POST /leads/import in manageable chunks (2,500 leads per chunk)
+        /// to ensure reliability even for massive datasets with hundreds of thousands of leads, with real-time progress and cancellation.
         /// </summary>
         public async Task<(bool Success, string Message, ImportResultData? Data)> ImportLeadsAsync(
             string batchName, 
             string fileName, 
             string initialStatus, 
-            System.Collections.Generic.IEnumerable<LeadModel> leads)
+            System.Collections.Generic.IList<LeadModel> leads,
+            IProgress<(int Processed, int Total, double Percentage, string StatusText)>? progress = null,
+            System.Threading.CancellationToken cancellationToken = default)
         {
+            if (leads == null || leads.Count == 0)
+            {
+                return (false, "No lead records to import.", null);
+            }
+
+            const int chunkSize = 2500;
+            int total = leads.Count;
+            int processed = 0;
+            int? currentBatchId = null;
+            string actualBatchName = batchName;
+            int totalInserted = 0;
+
             try
             {
-                var payload = new
+                int totalChunks = (int)Math.Ceiling((double)total / chunkSize);
+                int chunkIndex = 0;
+
+                for (int i = 0; i < total; i += chunkSize)
                 {
-                    batch_name = batchName,
-                    file_name = fileName,
-                    initial_status = initialStatus,
-                    user_id = CurrentUser?.Id,
-                    leads = leads
-                };
+                    if (cancellationToken.IsCancellationRequested)
+                    {
+                        if (currentBatchId.HasValue)
+                        {
+                            try { await DeleteBatchAsync(currentBatchId.Value); } catch { }
+                        }
+                        return (false, "Import was cancelled by user. All database records have been completely reverted (0 leads saved).", null);
+                    }
 
-                var json = JsonSerializer.Serialize(payload);
-                var content = new StringContent(json, Encoding.UTF8, "application/json");
+                    chunkIndex++;
+                    var currentChunk = leads.Skip(i).Take(chunkSize).ToList();
+                    bool isLastChunk = (i + chunkSize >= total);
 
-                var response = await _httpClient.PostAsync("leads/import", content);
-                var responseBody = await response.Content.ReadAsStringAsync();
+                    var payload = new
+                    {
+                        batch_id = currentBatchId,
+                        batch_name = actualBatchName,
+                        file_name = fileName,
+                        initial_status = initialStatus,
+                        user_id = CurrentUser?.Id,
+                        total_leads = total,
+                        is_last_chunk = isLastChunk,
+                        leads = currentChunk
+                    };
 
-                var result = JsonSerializer.Deserialize<ApiResponse<ImportResultData>>(responseBody);
+                    var json = JsonSerializer.Serialize(payload);
+                    var content = new StringContent(json, Encoding.UTF8, "application/json");
 
-                if (result == null)
-                {
-                    return (false, "Unable to parse server response.", null);
+                    var response = await _httpClient.PostAsync("leads/import", content, cancellationToken);
+                    var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
+
+                    ApiResponse<ImportResultData>? result = null;
+                    try
+                    {
+                        result = JsonSerializer.Deserialize<ApiResponse<ImportResultData>>(responseBody);
+                    }
+                    catch (JsonException)
+                    {
+                        var snippet = responseBody.Length > 250 ? responseBody.Substring(0, 250) + "..." : responseBody;
+                        return (false, $"Server returned unexpected response (chunk {chunkIndex}/{totalChunks}): {snippet}", null);
+                    }
+
+                    if (result == null || !result.Success)
+                    {
+                        return (false, result?.Message ?? $"Server rejected chunk {chunkIndex}/{totalChunks}.", null);
+                    }
+
+                    if (currentBatchId == null && result.Data?.BatchId > 0)
+                    {
+                        currentBatchId = result.Data.BatchId;
+                        if (!string.IsNullOrWhiteSpace(result.Data.BatchName))
+                            actualBatchName = result.Data.BatchName;
+                    }
+
+                    processed += currentChunk.Count;
+                    totalInserted += result.Data?.InsertedCount ?? currentChunk.Count;
+
+                    double pct = Math.Min(100.0, (double)processed / total * 100.0);
+                    var msg = $"Committed chunk {chunkIndex} of {totalChunks} ({processed:N0} / {total:N0} leads - {pct:F1}%)...";
+                    progress?.Report((processed, total, pct, msg));
                 }
 
-                return (result.Success, result.Message, result.Data);
+                var finalData = new ImportResultData
+                {
+                    BatchId = currentBatchId ?? 0,
+                    BatchName = actualBatchName,
+                    InsertedCount = totalInserted
+                };
+
+                return (true, $"Successfully imported {totalInserted:N0} leads into batch '{actualBatchName}'.", finalData);
             }
-            catch (HttpRequestException)
+            catch (OperationCanceledException)
             {
-                return (false, "Cannot connect to server. Please ensure XAMPP Apache & MySQL are running.", null);
+                if (currentBatchId.HasValue)
+                {
+                    try
+                    {
+                        // Cleanly wipe any partially inserted leads and the batch from MySQL
+                        await DeleteBatchAsync(currentBatchId.Value);
+                    }
+                    catch { }
+                }
+
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    return (false, "Import was cancelled by user. All database records have been completely reverted (0 leads saved).", null);
+                }
+                return (false, "Request timed out during batch upload.", null);
             }
-            catch (TaskCanceledException)
+            catch (HttpRequestException ex)
             {
-                return (false, "Import request timed out. Large batches may need more time.", null);
+                return (false, $"Network connection error: {ex.Message}. Please ensure Apache and MySQL are running.", null);
             }
             catch (Exception ex)
             {
