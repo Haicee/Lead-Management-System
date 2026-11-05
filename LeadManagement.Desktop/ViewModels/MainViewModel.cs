@@ -1,4 +1,4 @@
-using System.Windows.Input;
+﻿using System.Windows.Input;
 using LeadManagement.Desktop.Services;
 
 namespace LeadManagement.Desktop.ViewModels
@@ -36,6 +36,9 @@ namespace LeadManagement.Desktop.ViewModels
         public LeadMasterlistViewModel Masterlist { get; } = new();
         public ImportLeadsViewModel ImportLeads { get; } = new();
         public ImportHistoryViewModel ImportHistory { get; } = new();
+        public UserManagementViewModel UserManagement { get; } = new();
+        public UserDashboardViewModel UserDashboard { get; } = new();
+        public ManageClientsViewModel ManageClients { get; } = new();
 
         // --- Active User Display (populated from API response) ---
 
@@ -48,8 +51,24 @@ namespace LeadManagement.Desktop.ViewModels
         public string ActiveUserRole
         {
             get => _activeUserRole;
-            set => SetProperty(ref _activeUserRole, value);
+            set
+            {
+                if (SetProperty(ref _activeUserRole, value))
+                {
+                    OnPropertyChanged(nameof(IsAdmin));
+                    OnPropertyChanged(nameof(IsStandardUser));
+                    OnPropertyChanged(nameof(IsAdminShellVisible));
+                    OnPropertyChanged(nameof(IsUserShellVisible));
+                }
+            }
         }
+
+        public bool IsAdmin => _activeUserRole.Equals("Administrator", StringComparison.OrdinalIgnoreCase);
+        public bool IsStandardUser => !IsAdmin;
+
+        public bool IsLoginViewVisible => !IsLoggedIn;
+        public bool IsAdminShellVisible => IsLoggedIn && IsAdmin;
+        public bool IsUserShellVisible => IsLoggedIn && IsStandardUser;
 
         // --- Sidebar ---
 
@@ -72,7 +91,15 @@ namespace LeadManagement.Desktop.ViewModels
         public bool IsLoggedIn
         {
             get => _isLoggedIn;
-            set => SetProperty(ref _isLoggedIn, value);
+            set
+            {
+                if (SetProperty(ref _isLoggedIn, value))
+                {
+                    OnPropertyChanged(nameof(IsLoginViewVisible));
+                    OnPropertyChanged(nameof(IsAdminShellVisible));
+                    OnPropertyChanged(nameof(IsUserShellVisible));
+                }
+            }
         }
 
         public string Username
@@ -101,7 +128,7 @@ namespace LeadManagement.Desktop.ViewModels
         }
 
         /// <summary>
-        /// True while the login API call is in progress — used to show a spinner and disable the button.
+        /// True while the login API call is in progress Ã¢â‚¬â€ used to show a spinner and disable the button.
         /// </summary>
         public bool IsLoggingIn
         {
@@ -147,6 +174,7 @@ namespace LeadManagement.Desktop.ViewModels
                     OnPropertyChanged(nameof(IsMasterlistActive));
                     OnPropertyChanged(nameof(IsImportLeadsActive));
                     OnPropertyChanged(nameof(IsImportHistoryActive));
+                    OnPropertyChanged(nameof(IsUserManagementActive));
                     OnPropertyChanged(nameof(IsSettingsActive));
                 }
             }
@@ -157,6 +185,8 @@ namespace LeadManagement.Desktop.ViewModels
         public bool IsMasterlistActive => CurrentView == "LeadMasterlist";
         public bool IsImportLeadsActive => CurrentView == "ImportLeads";
         public bool IsImportHistoryActive => CurrentView == "ImportHistory";
+        public bool IsManageClientsActive => CurrentView == "ManageClients";
+        public bool IsUserManagementActive => CurrentView == "UserManagement";
         public bool IsSettingsActive => CurrentView == "Settings";
 
         // Metric Card Properties
@@ -229,7 +259,8 @@ namespace LeadManagement.Desktop.ViewModels
                     var user = ApiService.Instance.CurrentUser;
                     if (user != null)
                     {
-                        ActiveUser = user.FullName;
+                        ActiveUser = !string.IsNullOrWhiteSpace(user.FullName) ? user.FullName : user.Username;
+                        UserDashboard.AgentName = ActiveUser;
                         ActiveUserRole = user.Role == "admin" ? "Administrator" : "User";
                     }
 
@@ -238,7 +269,15 @@ namespace LeadManagement.Desktop.ViewModels
 
                     // Transition to the main dashboard
                     IsLoggedIn = true;
-                    CurrentView = "Dashboard";
+                    if (IsAdmin)
+                    {
+                        CurrentView = "Dashboard";
+                    }
+                    else
+                    {
+                        CurrentView = "UserDashboard";
+                        UserDashboard.CurrentUserView = "UserDashboard";
+                    }
                 }
                 else
                 {
@@ -277,6 +316,10 @@ namespace LeadManagement.Desktop.ViewModels
                 else if (destination == "ImportHistory")
                 {
                     _ = ImportHistory.LoadBatchesAsync();
+                }
+                else if (destination == "UserManagement")
+                {
+                    _ = UserManagement.LoadUsersAsync();
                 }
             }
         }

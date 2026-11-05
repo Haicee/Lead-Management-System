@@ -120,6 +120,40 @@ try {
         $controller->deleteBatch($batchId);
     }
 
+    // Client Routes
+    elseif ($path === 'clients' && $method === 'GET') {
+        require_once __DIR__ . '/controllers/ClientController.php';
+        $controller = new ClientController();
+        $controller->index();
+    }
+
+    elseif ($path === 'clients' && $method === 'POST') {
+        require_once __DIR__ . '/controllers/ClientController.php';
+        $controller = new ClientController();
+        $controller->store($input);
+    }
+
+    elseif ((preg_match('#^clients/(\d+)/files$#', $path, $matches) || $path === 'clients/files') && $method === 'POST') {
+        require_once __DIR__ . '/controllers/ClientController.php';
+        $controller = new ClientController();
+        $clientId = isset($matches[1]) ? (int)$matches[1] : (int)($input['client_id'] ?? 0);
+        $controller->uploadFile($clientId, $input);
+    }
+
+    elseif ((preg_match('#^clients/(\d+)/assign$#', $path, $matches) || $path === 'clients/assign') && $method === 'POST') {
+        require_once __DIR__ . '/controllers/ClientController.php';
+        $controller = new ClientController();
+        $clientId = isset($matches[1]) ? (int)$matches[1] : (int)($input['client_id'] ?? 0);
+        $controller->assignAgents($clientId, $input);
+    }
+
+    elseif ((preg_match('#^clients/(\d+)$#', $path, $matches) && $method === 'DELETE') || ($path === 'clients/delete' && $method === 'POST')) {
+        require_once __DIR__ . '/controllers/ClientController.php';
+        $controller = new ClientController();
+        $clientId = isset($matches[1]) ? (int)$matches[1] : (int)($input['id'] ?? $input['client_id'] ?? 0);
+        $controller->delete($clientId);
+    }
+
     // 404 — No matching route
     else {
         Response::notFound("Endpoint not found: {$method} /{$path}");
