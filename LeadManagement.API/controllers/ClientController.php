@@ -283,7 +283,7 @@ class ClientController
     /**
      * DELETE /clients/{id} or POST /clients/delete
      * 
-     * Deletes a client and cascades to their files and assignments.
+     * Deletes a client and cascades to their files, leads, and assignments.
      */
     public function delete(int $clientId): void
     {
@@ -291,10 +291,174 @@ class ClientController
             Response::error('Invalid client ID.', 422);
         }
 
-        $stmt = $this->db->prepare("DELETE FROM `clients` WHERE `id` = ?");
-        $stmt->execute([$clientId]);
+        try {
+            $this->db->beginTransaction();
 
-        Response::success(['id' => $clientId], 'Client deleted successfully.');
+            // 1. Find all batch IDs belonging to this client's files
+            $stmtFiles = $this->db->prepare("SELECT id, batch_id FROM `client_files` WHERE `client_id` = ?");
+            $stmtFiles->execute([$clientId]);
+            $files = $stmtFiles->fetchAll();
+
+            foreach ($files as $f) {
+                if (!empty($f['batch_id'])) {
+                    $batchId = (int)$f['batch_id'];
+                    $delLeads = $this->db->prepare("DELETE FROM `leads` WHERE `batch_id` = ?");
+                    $delLeads->execute([$batchId]);
+
+                    $delBatch = $this->db->prepare("DELETE FROM `import_batches` WHERE `id` = ?");
+                    $delBatch->execute([$batchId]);
+                }
+            }
+
+            // 2. Delete client (cascades client_files and client_agents)
+            $stmt = $this->db->prepare("DELETE FROM `clients` WHERE `id` = ?");
+            $stmt->execute([$clientId]);
+
+            $this->db->commit();
+
+            Response::success(['id' => $clientId], 'Client and all associated files deleted successfully.');
+        } catch (Exception $e) {
+            if ($this->db->inTransaction()) {
+                $this->db->rollBack();
+            }
+            Response::serverError('Failed to delete client: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * DELETE /clients/files/{id} or POST /clients/files/delete
+     * 
+     * Deletes a specific client file and all leads imported with it.
+     */
+    public function deleteFile(int $fileId): void
+    {
+        if ($fileId <= 0) {
+            Response::error('Invalid file ID.', 422);
+        }
+
+        $stmt = $this->db->prepare("SELECT id, client_id, client_name, file_name, batch_id, total_leads FROM `client_files` WHERE id = ?");
+        $stmt->execute([$fileId]);
+        $file = $stmt->fetch();
+
+        if (!$file) {
+            Response::notFound('Client file not found.');
+        }
+
+        try {
+            $this->db->beginTransaction();
+
+            $batchId = !empty($file['batch_id']) ? (int)$file['batch_id'] : null;
+            $deletedLeads = 0;
+
+            if ($batchId) {
+                // Delete associated leads
+                $delLeads = $this->db->prepare("DELETE FROM `leads` WHERE `batch_id` = ?");
+                $delLeads->execute([$batchId]);
+                $deletedLeads = $delLeads->rowCount();
+
+                // Delete associated import batch
+                $delBatch = $this->db->prepare("DELETE FROM `import_batches` WHERE `id` = ?");
+                $delBatch->execute([$batchId]);
+            }
+
+            // Delete from client_files
+            $delFile = $this->db->prepare("DELETE FROM `client_files` WHERE `id` = ?");
+            $delFile->execute([$fileId]);
+
+            $this->db->commit();
+
+            Response::success([
+                'id'            => $fileId,
+                'client_id'     => $file['client_id'],
+                'file_name'     => $file['file_name'],
+                'batch_id'      => $batchId,
+                'deleted_leads' => $deletedLeads
+            ], "File '{$file['file_name']}' and its leads were deleted successfully.");
+
+        } catch (Exception $e) {
+            if ($this->db->inTransaction()) {
+                $this->db->rollBack();
+            }
+            Response::serverError('Failed to delete client file: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * GET /clients/files/{id}/leads
+     * 
+     * Retrieves all lead records imported under a specific client file.
+     */
+    public function fileLeads(int $fileId): void
+    {
+        if ($fileId <= 0) {
+            Response::error('Invalid file ID.', 422);
+        }
+
+        $stmt = $this->db->prepare("SELECT id, client_id, client_name, file_name, file_size, batch_id, total_leads, created_at FROM `client_files` WHERE id = ?");
+        $stmt->execute([$fileId]);
+        $file = $stmt->fetch();
+
+        if (!$file) {
+            Response::notFound('Client file not found.');
+        }
+
+        $batchId = !empty($file['batch_id']) ? (int)$file['batch_id'] : null;
+        $leads = [];
+
+        if ($batchId) {
+            $stmtLeads = $this->db->prepare("
+                SELECT * FROM `leads` 
+                WHERE `batch_id` = ? 
+                ORDER BY `id` ASC
+            ");
+            $stmtLeads->execute([$batchId]);
+            $leads = $stmtLeads->fetchAll();
+        }
+
+        Response::success([
+            'file_id'     => $fileId,
+            'client_id'   => (int)$file['client_id'],
+            'client_name' => $file['client_name'],
+            'file_name'   => $file['file_name'],
+            'file_size'   => $file['file_size'],
+            'batch_id'    => $batchId,
+            'created_at'  => $file['created_at'],
+            'total'       => count($leads),
+            'leads'       => $leads
+        ], 'File leads retrieved successfully');
+    }
+
+    /**
+     * PUT /clients/files/{id} or POST /clients/files/update
+     * 
+     * Updates client file information (e.g. rename file).
+     */
+    public function updateFile(int $fileId, array $input): void
+    {
+        if ($fileId <= 0) {
+            Response::error('Invalid file ID.', 422);
+        }
+
+        $fileName = trim($input['file_name'] ?? '');
+        if (empty($fileName)) {
+            Response::error('File name is required.', 422);
+        }
+
+        $stmt = $this->db->prepare("SELECT id, file_name FROM `client_files` WHERE id = ?");
+        $stmt->execute([$fileId]);
+        $file = $stmt->fetch();
+
+        if (!$file) {
+            Response::notFound('Client file not found.');
+        }
+
+        $upd = $this->db->prepare("UPDATE `client_files` SET `file_name` = ? WHERE `id` = ?");
+        $upd->execute([$fileName, $fileId]);
+
+        Response::success([
+            'id'        => $fileId,
+            'file_name' => $fileName
+        ], 'File updated successfully.');
     }
 }
 

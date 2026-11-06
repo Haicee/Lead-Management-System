@@ -267,6 +267,148 @@ class LeadController
     }
 
     /**
+     * POST /leads/query
+     * 
+     * Advanced server-side query with multi-select filters, search, pagination, and sorting.
+     */
+    public function query(array $input): void
+    {
+        @ini_set('memory_limit', '1024M');
+        @set_time_limit(300);
+
+        $limit = isset($input['limit']) ? max((int) $input['limit'], 0) : 1000;
+        $offset = isset($input['offset']) ? max((int) $input['offset'], 0) : 0;
+        $search = trim($input['search'] ?? '');
+        $batchId = !empty($input['batch_id']) ? (int) $input['batch_id'] : null;
+
+        // Multi-select arrays or single strings
+        $cities = $this->normalizeArray($input['cities'] ?? $input['city'] ?? []);
+        $counties = $this->normalizeArray($input['counties'] ?? $input['county'] ?? []);
+        $states = $this->normalizeArray($input['states'] ?? $input['state'] ?? []);
+        $statuses = $this->normalizeArray($input['statuses'] ?? $input['status'] ?? []);
+        $industries = $this->normalizeArray($input['industries'] ?? $input['sic_description'] ?? []);
+        $annualSales = $this->normalizeArray($input['annual_sales'] ?? []);
+        $naicsCodes = $this->normalizeArray($input['naics_codes'] ?? $input['naics_code'] ?? []);
+        $naicsDescs = $this->normalizeArray($input['naics_descriptions'] ?? $input['naics_description'] ?? []);
+
+        // Sorting
+        $sortMap = [
+            'id' => 'id',
+            'status' => 'status',
+            'businessname' => 'business_name',
+            'business_name' => 'business_name',
+            'address' => 'address',
+            'city' => 'city',
+            'county' => 'county',
+            'state' => 'state',
+            'zipcode' => 'zip_code',
+            'zip_code' => 'zip_code',
+            'cellnumber' => 'cell_number',
+            'cell_number' => 'cell_number',
+            'fax' => 'fax',
+            'annualsales' => 'annual_sales',
+            'annual_sales' => 'annual_sales',
+            'numberofemployees' => 'number_of_employees',
+            'number_of_employees' => 'number_of_employees',
+            'title' => 'title',
+            'contactname' => 'contact_name',
+            'contact_name' => 'contact_name',
+            'website' => 'website',
+            'siccode' => 'sic_code',
+            'sic_code' => 'sic_code',
+            'sicdescription' => 'sic_description',
+            'sic_description' => 'sic_description',
+            'naicscode' => 'naics_code',
+            'naics_code' => 'naics_code',
+            'naicsdescription' => 'naics_description',
+            'naics_description' => 'naics_description',
+            'createdat' => 'created_at',
+            'created_at' => 'created_at',
+        ];
+        $rawSort = strtolower(str_replace('_', '', $input['sort_by'] ?? ''));
+        $sortBy = $sortMap[$rawSort] ?? 'id';
+        $sortDir = strtoupper($input['sort_direction'] ?? '') === 'DESC' ? 'DESC' : 'ASC';
+
+        $conditions = [];
+        $params = [];
+
+        if (!empty($batchId)) {
+            $conditions[] = "`batch_id` = ?";
+            $params[] = $batchId;
+        }
+
+        $addInCondition = function(string $col, array $values) use (&$conditions, &$params) {
+            $filtered = array_values(array_filter($values, function($v) {
+                return $v !== null && $v !== '' && !str_starts_with($v, 'All ');
+            }));
+            if (!empty($filtered)) {
+                $placeholders = implode(',', array_fill(0, count($filtered), '?'));
+                $conditions[] = "`{$col}` IN ({$placeholders})";
+                foreach ($filtered as $val) {
+                    $params[] = $val;
+                }
+            }
+        };
+
+        $addInCondition('status', $statuses);
+        $addInCondition('city', $cities);
+        $addInCondition('county', $counties);
+        $addInCondition('state', $states);
+        $addInCondition('annual_sales', $annualSales);
+        $addInCondition('naics_code', $naicsCodes);
+        $addInCondition('naics_description', $naicsDescs);
+        $addInCondition('sic_description', $industries);
+
+        if (!empty($search)) {
+            $term = '%' . $search . '%';
+            $conditions[] = "(`business_name` LIKE ? OR `contact_name` LIKE ? OR `cell_number` LIKE ? OR `city` LIKE ? OR `county` LIKE ? OR `address` LIKE ? OR `zip_code` LIKE ? OR `naics_description` LIKE ? OR `sic_description` LIKE ? OR `title` LIKE ?)";
+            for ($k = 0; $k < 10; $k++) {
+                $params[] = $term;
+            }
+        }
+
+        $whereClause = !empty($conditions) ? 'WHERE ' . implode(' AND ', $conditions) : '';
+
+        // Total leads in entire database (without active filters)
+        $totalAllStmt = $this->db->query("SELECT COUNT(*) FROM `leads`");
+        $totalAll = (int) $totalAllStmt->fetchColumn();
+
+        // Total leads matching current filters
+        $countStmt = $this->db->prepare("SELECT COUNT(*) FROM `leads` {$whereClause}");
+        $countStmt->execute($params);
+        $filteredTotal = (int) $countStmt->fetchColumn();
+
+        // Data rows
+        $limitClause = $limit > 0 ? "LIMIT {$limit} OFFSET {$offset}" : "";
+        $sql = "
+            SELECT * FROM `leads` 
+            {$whereClause} 
+            ORDER BY `{$sortBy}` {$sortDir} 
+            {$limitClause}
+        ";
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+        $leads = $stmt->fetchAll();
+
+        Response::success([
+            'total'          => $totalAll,
+            'filtered_total' => $filteredTotal,
+            'limit'          => $limit,
+            'offset'         => $offset,
+            'leads'          => $leads
+        ], 'Leads query successful');
+    }
+
+    private function normalizeArray($val): array
+    {
+        if (is_array($val)) return $val;
+        if (is_string($val) && strlen(trim($val)) > 0) {
+            return array_map('trim', explode(',', $val));
+        }
+        return [];
+    }
+
+    /**
      * GET /leads/filters
      * 
      * Returns distinct filter options present in the database.

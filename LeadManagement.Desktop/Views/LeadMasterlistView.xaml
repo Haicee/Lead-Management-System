@@ -213,16 +213,18 @@
                 Style="{StaticResource CardBorderStyle}" 
                 Padding="0" 
                 ClipToBounds="True">
-            <DataGrid ItemsSource="{Binding FilteredLeads}"     
-                      SelectedItem="{Binding SelectedLead, Mode=TwoWay}"
-                      Style="{StaticResource ModernDataGridStyle}"
-                      EnableRowVirtualization="True"
-                      VirtualizingPanel.IsVirtualizing="True"
-                      VirtualizingPanel.VirtualizationMode="Recycling"
-                      GridLinesVisibility="None"
-                      ClipboardCopyMode="ExcludeHeader"
-                      VerticalScrollBarVisibility="Auto"
-                      HorizontalScrollBarVisibility="Auto">
+            <Grid>
+                <DataGrid ItemsSource="{Binding FilteredLeads}"     
+                          SelectedItem="{Binding SelectedLead, Mode=TwoWay}"
+                          Style="{StaticResource ModernDataGridStyle}"
+                          EnableRowVirtualization="True"
+                          VirtualizingPanel.IsVirtualizing="True"
+                          VirtualizingPanel.VirtualizationMode="Recycling"
+                          GridLinesVisibility="None"
+                          ClipboardCopyMode="ExcludeHeader"
+                          VerticalScrollBarVisibility="Auto"
+                          HorizontalScrollBarVisibility="Auto"
+                          Sorting="OnDataGridSorting">
                 <DataGrid.Columns>
 
                     <!-- Status Column (Retained & Highlighted) -->
@@ -486,7 +488,149 @@
 
                 </DataGrid.Columns>
             </DataGrid>
-        </Border>
+
+            <!-- Loading Overlay inside Table -->
+            <Border Background="#F8FAFC" 
+                    Opacity="0.94"
+                    Visibility="{Binding IsLoading, Converter={StaticResource BooleanToVisibilityConverter}}"
+                    Panel.ZIndex="100">
+                <Border Background="White" 
+                        CornerRadius="14" 
+                        BorderBrush="#E2E8F0" 
+                        BorderThickness="1" 
+                        Padding="32,28"
+                        HorizontalAlignment="Center" 
+                        VerticalAlignment="Center">
+                    <Border.Effect>
+                        <DropShadowEffect BlurRadius="24" ShadowDepth="6" Opacity="0.12" Color="#0F172A" />
+                    </Border.Effect>
+                    <StackPanel Width="340" HorizontalAlignment="Center">
+                        <!-- Spinner / Icon & Title -->
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,14">
+                            <Border Background="#EFF6FF" CornerRadius="8" Width="36" Height="36" Margin="0,0,10,0">
+                                <TextBlock Text="⏳" FontSize="18" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Border>
+                            <StackPanel VerticalAlignment="Center">
+                                <TextBlock Text="Loading Masterlist" FontSize="15" FontWeight="Bold" Foreground="{StaticResource TextPrimaryBrush}" />
+                                <TextBlock Text="Fetching leads from database..." FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" />
+                            </StackPanel>
+                        </StackPanel>
+
+                        <!-- Indeterminate Progress Bar -->
+                        <ProgressBar Height="6" 
+                                     IsIndeterminate="True" 
+                                     Foreground="{StaticResource PrimaryBrush}" 
+                                     Background="#E2E8F0" 
+                                     BorderThickness="0" 
+                                     Margin="0,0,0,12" />
+
+                        <TextBlock Text="Loading records, please wait a moment..." 
+                                   FontSize="12" 
+                                   Foreground="{StaticResource TextSecondaryBrush}" 
+                                   HorizontalAlignment="Center" />
+                    </StackPanel>
+                </Border>
+            </Border>
+        </Grid>
+    </Border>
+
+    <!-- ============================================================= -->
+    <!-- ROW 2: PAGINATION BAR & NAVIGATION CONTROLS                  -->
+    <!-- ============================================================= -->
+    <Border Grid.Row="2" 
+            Background="White" 
+            BorderBrush="#E2E8F0" 
+            BorderThickness="1" 
+            CornerRadius="8" 
+            Padding="16,10" 
+            Margin="0,12,0,0">
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <!-- Left: Record summary (e.g., Showing 1 - 500 of 270,186 records) + Rows per page selector -->
+            <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                <TextBlock Text="{Binding PaginationSummary}" 
+                           FontSize="13" 
+                           FontWeight="SemiBold" 
+                           Foreground="{StaticResource TextPrimaryBrush}" 
+                           VerticalAlignment="Center" />
+
+                <!-- Rows per page selector -->
+                <StackPanel Orientation="Horizontal" Margin="24,0,0,0" VerticalAlignment="Center">
+                    <TextBlock Text="Rows per page:" 
+                               FontSize="12.5" 
+                               Foreground="{StaticResource TextSecondaryBrush}" 
+                               VerticalAlignment="Center" 
+                               Margin="0,0,8,0" />
+                    <ComboBox ItemsSource="{Binding PageSizeOptions}" 
+                              SelectedItem="{Binding PageSize, Mode=TwoWay}"
+                              Style="{StaticResource ModernComboBoxStyle}"
+                              Width="85" 
+                              Height="32" 
+                              FontSize="12" />
+                </StackPanel>
+            </StackPanel>
+
+            <!-- Right: Navigation Pagination Buttons -->
+            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                <!-- First Page -->
+                <Button Content="⏮ First" 
+                        Command="{Binding FirstPageCommand}" 
+                        IsEnabled="{Binding HasPreviousPage}"
+                        Style="{StaticResource SecondaryButtonStyle}" 
+                        Padding="10,6" 
+                        FontSize="12"
+                        Margin="0,0,6,0"
+                        ToolTip="Go to first page" />
+
+                <!-- Previous Page -->
+                <Button Content="◀ Prev" 
+                        Command="{Binding PreviousPageCommand}" 
+                        IsEnabled="{Binding HasPreviousPage}"
+                        Style="{StaticResource SecondaryButtonStyle}" 
+                        Padding="12,6" 
+                        FontSize="12"
+                        Margin="0,0,10,0"
+                        ToolTip="Go to previous page" />
+
+                <!-- Current Page Display Badge -->
+                <Border Background="#F1F5F9" 
+                        BorderBrush="#CBD5E1" 
+                        BorderThickness="1" 
+                        CornerRadius="6" 
+                        Padding="14,5" 
+                        Margin="0,0,10,0" 
+                        VerticalAlignment="Center">
+                    <TextBlock Text="{Binding PageNumberText}" 
+                               FontSize="12.5" 
+                               FontWeight="SemiBold" 
+                               Foreground="{StaticResource TextPrimaryBrush}" />
+                </Border>
+
+                <!-- Next Page -->
+                <Button Content="Next ▶" 
+                        Command="{Binding NextPageCommand}" 
+                        IsEnabled="{Binding HasNextPage}"
+                        Style="{StaticResource PrimaryButtonStyle}" 
+                        Padding="14,6" 
+                        FontSize="12"
+                        Margin="0,0,6,0"
+                        ToolTip="Go to next page" />
+
+                <!-- Last Page -->
+                <Button Content="Last ⏭" 
+                        Command="{Binding LastPageCommand}" 
+                        IsEnabled="{Binding HasNextPage}"
+                        Style="{StaticResource SecondaryButtonStyle}" 
+                        Padding="10,6" 
+                        FontSize="12"
+                        ToolTip="Go to last page" />
+            </StackPanel>
+        </Grid>
+    </Border>
 
         <!-- ======================================================== -->
         <!-- MODAL OVERLAY: Exporting Leads Progress & Cancel         -->

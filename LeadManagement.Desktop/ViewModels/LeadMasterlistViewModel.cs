@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Input;
@@ -14,28 +16,57 @@ namespace LeadManagement.Desktop.ViewModels
 {
     public class LeadMasterlistViewModel : BaseViewModel
     {
-        private readonly List<LeadModel> _allLeadsMaster = new();
         private ObservableCollection<LeadModel> _filteredLeads = new();
         private LeadModel? _selectedLead;
         private string _searchText = string.Empty;
         private bool _isLoading = false;
 
+        private int _totalCount = 0;
+        private int _filteredCount = 0;
+        private int _pageSize = 1000;
+        private int _currentPage = 1;
+        private string _sortBy = "id";
+        private string _sortDirection = "ASC";
+
+        private bool _isPopulatingFilters = false;
+        private CancellationTokenSource? _queryCts;
+
         public LeadMasterlistViewModel()
         {
             ClearFiltersCommand = new RelayCommand(ExecuteClearFilters);
-            RefreshCommand = new RelayCommand(async () => await LoadLeadsAsync());
+            RefreshCommand = new RelayCommand(async () => await ReloadAllAsync());
             ExportFilteredCommand = new RelayCommand(ExecuteExportFiltered);
             ExportAllCommand = new RelayCommand(ExecuteExportAll);
-            ExportCommand = new RelayCommand(ExecuteExportFiltered); // Default export action
+            ExportCommand = new RelayCommand(ExecuteExportFiltered);
             CancelExportCommand = new RelayCommand(() =>
             {
                 _exportCts?.Cancel();
                 ExportModalStatus = "Cancelling export...";
             });
 
-            // Fetch real leads from MySQL database on startup
-            _ = LoadLeadsAsync();
+            FirstPageCommand = new RelayCommand(() => GoToPage(1), () => HasPreviousPage);
+            PreviousPageCommand = new RelayCommand(() => GoToPage(CurrentPage - 1), () => HasPreviousPage);
+            NextPageCommand = new RelayCommand(() => GoToPage(CurrentPage + 1), () => HasNextPage);
+            LastPageCommand = new RelayCommand(() => GoToPage(TotalPages), () => HasNextPage);
+
+            // High performance parallel startup: load distinct filter options and fetch initial 1,000 page
+            _ = InitializeAsync();
         }
+
+        private async Task InitializeAsync()
+        {
+            await Task.WhenAll(PopulateFilterListsAsync(), FetchLeadsPageAsync());
+        }
+
+        public async Task ReloadAllAsync()
+        {
+            await Task.WhenAll(PopulateFilterListsAsync(), FetchLeadsPageAsync());
+        }
+
+        /// <summary>
+        /// Backward-compatible alias for navigation reload.
+        /// </summary>
+        public Task LoadLeadsAsync() => ReloadAllAsync();
 
         public ObservableCollection<LeadModel> FilteredLeads
         {
@@ -65,6 +96,7 @@ namespace LeadManagement.Desktop.ViewModels
                 if (SetProperty(ref _isLoading, value))
                 {
                     OnPropertyChanged(nameof(ShowingCountText));
+                    OnPropertyChanged(nameof(PaginationSummary));
                 }
             }
         }
@@ -76,9 +108,73 @@ namespace LeadManagement.Desktop.ViewModels
             {
                 if (SetProperty(ref _searchText, value))
                 {
-                    ApplyFilter();
+                    CurrentPage = 1;
+                    _ = TriggerQueryAsync(debounced: true, debounceMs: 300);
                 }
             }
+        }
+
+        // ─── Pagination Properties ───────────────────────────────────────────────
+
+        public List<int> PageSizeOptions { get; } = new() { 100, 200, 500, 1000 };
+
+        public int PageSize
+        {
+            get => _pageSize;
+            set
+            {
+                if (value > 0 && SetProperty(ref _pageSize, value))
+                {
+                    CurrentPage = 1;
+                    _ = FetchLeadsPageAsync();
+                }
+            }
+        }
+
+        public int CurrentPage
+        {
+            get => _currentPage;
+            set => SetProperty(ref _currentPage, value);
+        }
+
+        public int TotalPages => FilteredCount == 0 ? 1 : (int)Math.Ceiling((double)FilteredCount / PageSize);
+
+        public bool HasPreviousPage => CurrentPage > 1;
+
+        public bool HasNextPage => CurrentPage < TotalPages;
+
+        public string PageNumberText => $"Page {CurrentPage:N0} of {TotalPages:N0}";
+
+        public string PaginationSummary
+        {
+            get
+            {
+                if (IsLoading) return "Loading records from database...";
+                if (FilteredCount == 0) return "No records found matching filters";
+                int start = (CurrentPage - 1) * PageSize + 1;
+                int end = Math.Min(CurrentPage * PageSize, FilteredCount);
+                if (HasActiveFilters)
+                {
+                    return $"Showing {start:N0}–{end:N0} of {FilteredCount:N0} records (filtered from {TotalCount:N0} total)";
+                }
+                return $"Showing {start:N0}–{end:N0} of {TotalCount:N0} records";
+            }
+        }
+
+        public ICommand FirstPageCommand { get; }
+        public ICommand PreviousPageCommand { get; }
+        public ICommand NextPageCommand { get; }
+        public ICommand LastPageCommand { get; }
+
+        private void GoToPage(int page)
+        {
+            int maxPages = TotalPages;
+            if (page < 1) page = 1;
+            if (page > maxPages) page = maxPages;
+            if (CurrentPage == page) return;
+
+            CurrentPage = page;
+            _ = FetchLeadsPageAsync();
         }
 
         // ─── Multi-Select Filter Collections (ObservableCollection<FilterItem>) ───
@@ -94,8 +190,17 @@ namespace LeadManagement.Desktop.ViewModels
 
         // ─── Computed Properties ─────────────────────────────────────────────────
 
-        public int TotalCount => _allLeadsMaster.Count;
-        public int FilteredCount => FilteredLeads.Count;
+        public int TotalCount
+        {
+            get => _totalCount;
+            private set => SetProperty(ref _totalCount, value);
+        }
+
+        public int FilteredCount
+        {
+            get => _filteredCount;
+            private set => SetProperty(ref _filteredCount, value);
+        }
 
         public bool HasActiveFilters =>
             !string.IsNullOrWhiteSpace(SearchText) ||
@@ -124,7 +229,7 @@ namespace LeadManagement.Desktop.ViewModels
                 ? $"⤓ Export Filtered ({FilteredCount:N0})"
                 : "⤓ Export Filtered";
 
-        public string ExportAllButtonText => $"⤓ Export All";
+        public string ExportAllButtonText => $"⤓ Export All ({TotalCount:N0})";
 
         // ─── Export Loading Modal State Properties ───
         private bool _isExportModalOpen = false;
@@ -133,7 +238,7 @@ namespace LeadManagement.Desktop.ViewModels
         private string _exportModalStatus = "Preparing data...";
         private double _exportProgressPercentage = 0;
         private bool _isExportIndeterminate = true;
-        private System.Threading.CancellationTokenSource? _exportCts;
+        private CancellationTokenSource? _exportCts;
 
         public bool IsExportModalOpen
         {
@@ -178,243 +283,263 @@ namespace LeadManagement.Desktop.ViewModels
         public ICommand ExportCommand { get; }
         public ICommand CancelExportCommand { get; }
 
-        // ─── Helper: Extract selected names as a HashSet for fast OR matching ─────
-
-        private static HashSet<string> GetSelected(ObservableCollection<FilterItem> items) =>
-            new(items.Where(i => i.IsSelected).Select(i => i.Name), StringComparer.OrdinalIgnoreCase);
-
-        // ─── Subscribe to FilterItem changes so filter re-runs on every checkbox toggle ─
+        private static List<string> GetSelected(ObservableCollection<FilterItem> items) =>
+            items.Where(i => i.IsSelected).Select(i => i.Name).ToList();
 
         private void SubscribeToItems(ObservableCollection<FilterItem> items)
         {
             foreach (var item in items)
+            {
                 item.PropertyChanged += (_, e) =>
                 {
-                    if (e.PropertyName == nameof(FilterItem.IsSelected))
-                        ApplyFilter();
+                    if (e.PropertyName == nameof(FilterItem.IsSelected) && !_isPopulatingFilters)
+                    {
+                        CurrentPage = 1;
+                        _ = TriggerQueryAsync(debounced: true, debounceMs: 150);
+                    }
                 };
+            }
+        }
+
+        private async Task TriggerQueryAsync(bool debounced = false, int debounceMs = 250)
+        {
+            if (_isPopulatingFilters) return;
+
+            _queryCts?.Cancel();
+            _queryCts?.Dispose();
+            _queryCts = new CancellationTokenSource();
+            var token = _queryCts.Token;
+
+            if (debounced)
+            {
+                try
+                {
+                    await Task.Delay(debounceMs, token);
+                }
+                catch (TaskCanceledException)
+                {
+                    return;
+                }
+            }
+
+            if (token.IsCancellationRequested) return;
+
+            await FetchLeadsPageAsync(token);
         }
 
         /// <summary>
-        /// Fetches all leads directly from the MySQL database via the PHP REST API.
-        /// Passes limit=0 to retrieve the complete dataset without truncation.
+        /// Fetches the currently active page directly from MySQL via POST /leads/query.
+        /// Loads only the requested page slice (e.g. 1,000 records) in milliseconds.
         /// </summary>
-        public async Task LoadLeadsAsync()
+        public async Task FetchLeadsPageAsync(CancellationToken token = default)
         {
-            if (IsLoading) return;
-
             IsLoading = true;
             try
             {
-                var (success, _, data) = await ApiService.Instance.GetLeadsAsync(limit: 0);
+                var req = BuildQueryRequest(limit: PageSize, offset: (CurrentPage - 1) * PageSize);
+                var (success, message, data) = await ApiService.Instance.QueryLeadsAsync(req, token);
 
-                if (success && data?.Leads != null)
+                if (token.IsCancellationRequested) return;
+
+                if (success && data != null)
                 {
-                    _allLeadsMaster.Clear();
-                    _allLeadsMaster.AddRange(data.Leads);
+                    TotalCount = data.Total;
+                    FilteredCount = data.FilteredTotal;
+                    FilteredLeads = new ObservableCollection<LeadModel>(data.Leads);
 
-                    int withWeb = data.Leads.Count(l => !string.IsNullOrWhiteSpace(l.Website));
-                    var msg = $"[LMS Masterlist] Fetched {data.Leads.Count} leads from API. {withWeb} have website.";
-                    Console.WriteLine(msg);
-                    System.Diagnostics.Debug.WriteLine(msg);
-
-                    PopulateFilterLists();
-                    ApplyFilter();
+                    if (SelectedLead == null || !FilteredLeads.Contains(SelectedLead))
+                    {
+                        SelectedLead = FilteredLeads.FirstOrDefault();
+                    }
                 }
+                else if (!string.IsNullOrWhiteSpace(message) && !token.IsCancellationRequested)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[LMS Query Warning] {message}");
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                // Silently swallow query cancellations when newer inputs arrive
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Could not load leads from database: {ex.Message}", "Database Connection", MessageBoxButton.OK, MessageBoxImage.Warning);
+                System.Diagnostics.Debug.WriteLine($"[LMS Query Error] {ex.Message}");
             }
             finally
             {
-                IsLoading = false;
-                OnPropertyChanged(nameof(TotalCount));
-                OnPropertyChanged(nameof(FilteredCount));
-                OnPropertyChanged(nameof(ShowingCountText));
-                OnPropertyChanged(nameof(HasActiveFilters));
-                OnPropertyChanged(nameof(ExportFilteredButtonText));
-                OnPropertyChanged(nameof(ExportAllButtonText));
+                if (!token.IsCancellationRequested)
+                {
+                    IsLoading = false;
+                    NotifyPaginationProperties();
+                }
             }
+        }
+
+        private LeadQueryRequest BuildQueryRequest(int limit, int offset)
+        {
+            var cities = GetSelected(CityItems);
+            var counties = GetSelected(CountyItems);
+            var states = GetSelected(StateItems);
+            var statuses = GetSelected(StatusItems);
+            var industries = GetSelected(IndustryItems);
+            var annualSales = GetSelected(AnnualSalesItems);
+            var naicsCodes = GetSelected(NaicsCodeItems);
+            var naicsDescs = GetSelected(NaicsDescItems);
+
+            return new LeadQueryRequest
+            {
+                Search = string.IsNullOrWhiteSpace(SearchText) ? null : SearchText.Trim(),
+                Limit = limit,
+                Offset = offset,
+                SortBy = _sortBy,
+                SortDirection = _sortDirection,
+                Cities = cities.Count > 0 ? cities : null,
+                Counties = counties.Count > 0 ? counties : null,
+                States = states.Count > 0 ? states : null,
+                Statuses = statuses.Count > 0 ? statuses : null,
+                Industries = industries.Count > 0 ? industries : null,
+                AnnualSales = annualSales.Count > 0 ? annualSales : null,
+                NaicsCodes = naicsCodes.Count > 0 ? naicsCodes : null,
+                NaicsDescriptions = naicsDescs.Count > 0 ? naicsDescs : null
+            };
+        }
+
+        private void NotifyPaginationProperties()
+        {
+            OnPropertyChanged(nameof(CurrentPage));
+            OnPropertyChanged(nameof(TotalPages));
+            OnPropertyChanged(nameof(HasPreviousPage));
+            OnPropertyChanged(nameof(HasNextPage));
+            OnPropertyChanged(nameof(PaginationSummary));
+            OnPropertyChanged(nameof(PageNumberText));
+            OnPropertyChanged(nameof(ShowingCountText));
+            OnPropertyChanged(nameof(FilteredCount));
+            OnPropertyChanged(nameof(TotalCount));
+            OnPropertyChanged(nameof(HasActiveFilters));
+            OnPropertyChanged(nameof(ExportFilteredButtonText));
+            OnPropertyChanged(nameof(ExportAllButtonText));
         }
 
         private void ExecuteClearFilters()
         {
-            _searchText = string.Empty;
-            OnPropertyChanged(nameof(SearchText));
-
-            // Deselect all items in every filter collection
-            foreach (var item in CityItems) item.IsSelected = false;
-            foreach (var item in CountyItems) item.IsSelected = false;
-            foreach (var item in StateItems) item.IsSelected = false;
-            foreach (var item in IndustryItems) item.IsSelected = false;
-            foreach (var item in AnnualSalesItems) item.IsSelected = false;
-            foreach (var item in NaicsCodeItems) item.IsSelected = false;
-            foreach (var item in NaicsDescItems) item.IsSelected = false;
-            foreach (var item in StatusItems) item.IsSelected = false;
-
-            ApplyFilter();
-        }
-
-        private void ApplyFilter()
-        {
-            IEnumerable<LeadModel> query = _allLeadsMaster;
-
-            // 1. Text Search Filter across multiple attributes
-            if (!string.IsNullOrWhiteSpace(SearchText))
+            _isPopulatingFilters = true;
+            try
             {
-                var term = SearchText.Trim().ToLowerInvariant();
-                query = query.Where(l =>
-                    (l.BusinessName?.ToLowerInvariant().Contains(term) ?? false) ||
-                    (l.ContactName?.ToLowerInvariant().Contains(term) ?? false) ||
-                    (l.CellNumber?.Contains(term) ?? false) ||
-                    (l.City?.ToLowerInvariant().Contains(term) ?? false) ||
-                    (l.County?.ToLowerInvariant().Contains(term) ?? false) ||
-                    (l.State?.ToLowerInvariant().Contains(term) ?? false) ||
-                    (l.ZipCode?.Contains(term) ?? false) ||
-                    (l.AnnualSales?.ToLowerInvariant().Contains(term) ?? false) ||
-                    (l.SicCode?.Contains(term) ?? false) ||
-                    (l.SicDescription?.ToLowerInvariant().Contains(term) ?? false) ||
-                    (l.NaicsCode?.Contains(term) ?? false) ||
-                    (l.NaicsDescription?.ToLowerInvariant().Contains(term) ?? false) ||
-                    (l.Title?.ToLowerInvariant().Contains(term) ?? false) ||
-                    (l.Website?.ToLowerInvariant().Contains(term) ?? false) ||
-                    (l.Address?.ToLowerInvariant().Contains(term) ?? false));
+                _searchText = string.Empty;
+                OnPropertyChanged(nameof(SearchText));
+
+                foreach (var item in CityItems) item.IsSelected = false;
+                foreach (var item in CountyItems) item.IsSelected = false;
+                foreach (var item in StateItems) item.IsSelected = false;
+                foreach (var item in IndustryItems) item.IsSelected = false;
+                foreach (var item in AnnualSalesItems) item.IsSelected = false;
+                foreach (var item in NaicsCodeItems) item.IsSelected = false;
+                foreach (var item in NaicsDescItems) item.IsSelected = false;
+                foreach (var item in StatusItems) item.IsSelected = false;
+            }
+            finally
+            {
+                _isPopulatingFilters = false;
             }
 
-            // 2. City Filter (OR within selected cities, skip if none selected)
-            var selectedCities = GetSelected(CityItems);
-            if (selectedCities.Count > 0)
-                query = query.Where(l => selectedCities.Contains(l.City ?? string.Empty));
-
-            // 3. County Filter (OR within selected counties)
-            var selectedCounties = GetSelected(CountyItems);
-            if (selectedCounties.Count > 0)
-                query = query.Where(l => selectedCounties.Contains(l.County ?? string.Empty));
-
-            // 4. State Filter (OR within selected states)
-            var selectedStates = GetSelected(StateItems);
-            if (selectedStates.Count > 0)
-                query = query.Where(l => selectedStates.Contains(l.State ?? string.Empty));
-
-            // 5. Industry / SIC Filter (OR within selected industries)
-            var selectedIndustries = GetSelected(IndustryItems);
-            if (selectedIndustries.Count > 0)
-                query = query.Where(l => selectedIndustries.Contains(l.SicDescription ?? string.Empty));
-
-            // 6. Annual Sales Filter (OR within selected sales ranges)
-            var selectedSales = GetSelected(AnnualSalesItems);
-            if (selectedSales.Count > 0)
-                query = query.Where(l => selectedSales.Contains(l.AnnualSales ?? string.Empty));
-
-            // 7. NAICS Code Filter (OR within selected codes)
-            var selectedNaicsCodes = GetSelected(NaicsCodeItems);
-            if (selectedNaicsCodes.Count > 0)
-                query = query.Where(l => selectedNaicsCodes.Contains(l.NaicsCode ?? string.Empty));
-
-            // 8. NAICS Description Filter (OR within selected descriptions)
-            var selectedNaicsDescs = GetSelected(NaicsDescItems);
-            if (selectedNaicsDescs.Count > 0)
-                query = query.Where(l => selectedNaicsDescs.Contains(l.NaicsDescription ?? string.Empty));
-
-            // 9. Status Filter (OR within selected statuses)
-            var selectedStatuses = GetSelected(StatusItems);
-            if (selectedStatuses.Count > 0)
-                query = query.Where(l => selectedStatuses.Contains(l.Status ?? string.Empty));
-
-            FilteredLeads = new ObservableCollection<LeadModel>(query);
-            OnPropertyChanged(nameof(FilteredCount));
-            OnPropertyChanged(nameof(TotalCount));
-            OnPropertyChanged(nameof(ShowingCountText));
-            OnPropertyChanged(nameof(HasActiveFilters));
-            OnPropertyChanged(nameof(ExportFilteredButtonText));
-            OnPropertyChanged(nameof(ExportAllButtonText));
-
-            // Keep selected lead if still in filtered list
-            if (SelectedLead == null || !FilteredLeads.Contains(SelectedLead))
-            {
-                SelectedLead = FilteredLeads.FirstOrDefault();
-            }
+            CurrentPage = 1;
+            _ = TriggerQueryAsync(debounced: false);
         }
 
-        private void PopulateFilterLists()
+        private async Task PopulateFilterListsAsync()
         {
-            // Helper: build FilterItem list, subscribe, and load into collection
-            void Populate(ObservableCollection<FilterItem> collection, IEnumerable<string> values)
+            try
             {
-                collection.Clear();
-                foreach (var val in values.Where(v => !string.IsNullOrWhiteSpace(v)).Distinct().OrderBy(v => v))
+                var filters = await ApiService.Instance.GetLeadFiltersAsync();
+                if (filters == null) return;
+
+                _isPopulatingFilters = true;
+
+                void LoadItems(ObservableCollection<FilterItem> collection, IEnumerable<string>? vals)
                 {
-                    collection.Add(new FilterItem { Name = val });
+                    collection.Clear();
+                    if (vals != null)
+                    {
+                        foreach (var v in vals)
+                        {
+                            if (!string.IsNullOrWhiteSpace(v))
+                                collection.Add(new FilterItem { Name = v });
+                        }
+                    }
+                    SubscribeToItems(collection);
                 }
-                SubscribeToItems(collection);
+
+                LoadItems(CityItems, filters.Cities);
+                LoadItems(CountyItems, filters.Counties);
+                LoadItems(StateItems, filters.States);
+                LoadItems(IndustryItems, filters.Industries);
+                LoadItems(AnnualSalesItems, filters.AnnualSales);
+                LoadItems(NaicsCodeItems, filters.NaicsCodes);
+                LoadItems(NaicsDescItems, filters.NaicsDescriptions);
+
+                var knownStatuses = new[] { "New Lead", "Qualified", "Follow-up", "Contacted" };
+                var mergedStatuses = knownStatuses.Union(filters.Statuses ?? new List<string>(), StringComparer.OrdinalIgnoreCase).OrderBy(s => s).ToList();
+                LoadItems(StatusItems, mergedStatuses);
             }
-
-            // 1. Cities
-            Populate(CityItems, _allLeadsMaster.Select(l => l.City!));
-
-            // 2. Counties
-            Populate(CountyItems, _allLeadsMaster.Select(l => l.County!));
-
-            // 3. States
-            Populate(StateItems, _allLeadsMaster.Select(l => l.State!));
-
-            // 4. Industries (SIC Descriptions)
-            Populate(IndustryItems, _allLeadsMaster.Select(l => l.SicDescription!));
-
-            // 5. Annual Sales
-            Populate(AnnualSalesItems, _allLeadsMaster.Select(l => l.AnnualSales!));
-
-            // 6. NAICS Codes
-            Populate(NaicsCodeItems, _allLeadsMaster.Select(l => l.NaicsCode!));
-
-            // 7. NAICS Descriptions
-            Populate(NaicsDescItems, _allLeadsMaster.Select(l => l.NaicsDescription!));
-
-            // 8. Statuses (seed known values first, then add any from data)
-            var knownStatuses = new[] { "New Lead", "Qualified", "Follow-up", "Contacted" };
-            var dataStatuses = _allLeadsMaster.Select(l => l.Status ?? string.Empty)
-                                              .Where(s => !string.IsNullOrWhiteSpace(s))
-                                              .Distinct();
-            var allStatuses = knownStatuses.Union(dataStatuses, StringComparer.OrdinalIgnoreCase)
-                                           .OrderBy(s => s);
-            StatusItems.Clear();
-            foreach (var s in allStatuses)
-                StatusItems.Add(new FilterItem { Name = s });
-            SubscribeToItems(StatusItems);
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[LMS Filter Load Error] {ex.Message}");
+            }
+            finally
+            {
+                _isPopulatingFilters = false;
+            }
         }
 
         /// <summary>
-        /// Exports only the currently filtered leads to an Excel workbook with a loading modal and cancel support.
+        /// Sends sort parameters to MySQL and resets pagination to Page 1.
+        /// </summary>
+        public void SortMatchedLeads(string sortMemberPath, ListSortDirection direction)
+        {
+            _sortBy = sortMemberPath;
+            _sortDirection = direction == ListSortDirection.Ascending ? "ASC" : "DESC";
+            CurrentPage = 1;
+            _ = FetchLeadsPageAsync();
+        }
+
+        /// <summary>
+        /// Exports all filtered leads matching currently selected criteria directly from database without missing any records.
         /// </summary>
         private async void ExecuteExportFiltered()
         {
-            var leadsToExport = FilteredLeads.ToList();
-            var title = HasActiveFilters ? "Filtered Leads" : "Lead Masterlist";
-            var filePrefix = HasActiveFilters ? "Filtered_Leads" : "Lead_Masterlist";
-            await ExportLeadsToExcelAsync(leadsToExport, filePrefix, title);
-        }
-
-        /// <summary>
-        /// Exports all leads in the database without any active filters applied with a loading modal and cancel support.
-        /// </summary>
-        private async void ExecuteExportAll()
-        {
-            var leadsToExport = _allLeadsMaster.ToList();
-            await ExportLeadsToExcelAsync(leadsToExport, "All_Leads_Masterlist", "Complete Lead Masterlist");
-        }
-
-        /// <summary>
-        /// Shared Excel exporter using ClosedXML running in the background with a modal progress dialog.
-        /// </summary>
-        private async Task ExportLeadsToExcelAsync(List<LeadModel> leadsToExport, string filePrefix, string sheetTitle)
-        {
-            if (leadsToExport.Count == 0)
+            if (FilteredCount == 0)
             {
-                MessageBox.Show("There are no leads matching your selection to export.", "Export Leads", MessageBoxButton.OK, MessageBoxImage.Information);
+                MessageBox.Show("There are no leads matching your selection to export.", "Export Filtered Leads", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
 
+            var title = HasActiveFilters ? "Filtered Leads" : "Lead Masterlist";
+            var filePrefix = HasActiveFilters ? "Filtered_Leads" : "Lead_Masterlist";
+
+            var req = BuildQueryRequest(limit: 0, offset: 0);
+            await RunExcelExportAsync(req, filePrefix, title, FilteredCount);
+        }
+
+        /// <summary>
+        /// Exports all leads in the database without any active filters.
+        /// </summary>
+        private async void ExecuteExportAll()
+        {
+            if (TotalCount == 0)
+            {
+                MessageBox.Show("There are no leads in the database to export.", "Export All Leads", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            var req = new LeadQueryRequest { Limit = 0, Offset = 0, SortBy = "id", SortDirection = "ASC" };
+            await RunExcelExportAsync(req, "All_Leads_Masterlist", "Complete Lead Masterlist", TotalCount);
+        }
+
+        /// <summary>
+        /// Server-driven Excel exporter: fetches all matching records and streams them to Excel with progress feedback.
+        /// </summary>
+        private async Task RunExcelExportAsync(LeadQueryRequest queryReq, string filePrefix, string sheetTitle, int expectedCount)
+        {
             var dialog = new SaveFileDialog
             {
                 Title = $"Export {sheetTitle} to Excel",
@@ -427,18 +552,33 @@ namespace LeadManagement.Desktop.ViewModels
             string savePath = dialog.FileName;
 
             _exportCts?.Dispose();
-            _exportCts = new System.Threading.CancellationTokenSource();
+            _exportCts = new CancellationTokenSource();
             var token = _exportCts.Token;
 
             IsExportModalOpen = true;
             ExportModalTitle = $"Exporting {sheetTitle} to Excel...";
-            ExportModalSubtitle = $"{System.IO.Path.GetFileName(savePath)} • {leadsToExport.Count:N0} Leads";
-            ExportModalStatus = "Initializing Excel workbook...";
+            ExportModalSubtitle = $"{System.IO.Path.GetFileName(savePath)} • ~{expectedCount:N0} Leads";
+            ExportModalStatus = "Querying records from server database...";
             ExportProgressPercentage = 0;
             IsExportIndeterminate = true;
 
             try
             {
+                var (success, msg, data) = await ApiService.Instance.QueryLeadsAsync(queryReq, token);
+                if (!success || data?.Leads == null || data.Leads.Count == 0)
+                {
+                    MessageBox.Show(
+                        $"Could not retrieve leads from server for export: {msg}",
+                        "Export Error",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Warning);
+                    return;
+                }
+
+                var leadsToExport = data.Leads;
+                ExportModalSubtitle = $"{System.IO.Path.GetFileName(savePath)} • {leadsToExport.Count:N0} Leads";
+                ExportModalStatus = "Building Excel file...";
+
                 var progress = new Progress<(int written, int total, double pct, string msg)>(p =>
                 {
                     IsExportIndeterminate = p.total <= 0;
@@ -452,44 +592,26 @@ namespace LeadManagement.Desktop.ViewModels
                     using var workbook = new XLWorkbook();
                     var worksheet = workbook.Worksheets.Add("Leads");
 
-                    // 1. Column Header Names (All 18 table columns + batch metadata)
                     string[] headers = new[]
                     {
-                        "STATUS",
-                        "BUSINESS NAME",
-                        "ADDRESS",
-                        "CITY",
-                        "COUNTY",
-                        "STATE",
-                        "ZIP CODE",
-                        "CELL NUMBER",
-                        "FAX",
-                        "ANNUAL SALES",
-                        "NUMBER OF EMPLOYEE",
-                        "TITLE",
-                        "CONTACT NAME",
-                        "WEBSITE",
-                        "SIC CODE",
-                        "SIC DESCRIPTION",
-                        "NAICS CODE",
-                        "NAICS DESCRIPTION",
-                        "BATCH NAME"
+                        "STATUS", "BUSINESS NAME", "ADDRESS", "CITY", "COUNTY", "STATE", "ZIP CODE",
+                        "CELL NUMBER", "FAX", "ANNUAL SALES", "NUMBER OF EMPLOYEE", "TITLE",
+                        "CONTACT NAME", "WEBSITE", "SIC CODE", "SIC DESCRIPTION", "NAICS CODE",
+                        "NAICS DESCRIPTION", "BATCH NAME"
                     };
 
-                    // Format Header Row: Bold text, dark navy background, centered
                     for (int i = 0; i < headers.Length; i++)
                     {
                         var cell = worksheet.Cell(1, i + 1);
                         cell.Value = headers[i];
                         cell.Style.Font.Bold = true;
                         cell.Style.Font.FontColor = XLColor.White;
-                        cell.Style.Fill.BackgroundColor = XLColor.FromHtml("#1E293B"); // Navy branding
+                        cell.Style.Fill.BackgroundColor = XLColor.FromHtml("#1E293B");
                         cell.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
                         cell.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
                     }
                     worksheet.Row(1).Height = 26;
 
-                    // 2. Data Rows
                     int total = leadsToExport.Count;
                     int row = 2;
                     int counter = 0;
@@ -524,7 +646,6 @@ namespace LeadManagement.Desktop.ViewModels
                         worksheet.Cell(row, 18).SetValue(lead.NaicsDescription);
                         worksheet.Cell(row, 19).SetValue(lead.BatchName);
 
-                        // Subtle alternating zebra fill for readability
                         if (row % 2 == 1)
                         {
                             worksheet.Row(row).Style.Fill.BackgroundColor = XLColor.FromHtml("#F8FAFC");
@@ -536,9 +657,7 @@ namespace LeadManagement.Desktop.ViewModels
                     token.ThrowIfCancellationRequested();
                     ((IProgress<(int, int, double, string)>)progress).Report((total, total, 98.0, "Auto-adjusting column widths and saving..."));
 
-                    // Auto-fit all column widths based on contents
                     worksheet.Columns().AdjustToContents();
-
                     workbook.SaveAs(savePath);
                 }, token);
 

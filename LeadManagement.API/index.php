@@ -93,6 +93,12 @@ try {
         $controller->filters();
     }
 
+    elseif ($path === 'leads/query' && $method === 'POST') {
+        require_once __DIR__ . '/controllers/LeadController.php';
+        $controller = new LeadController();
+        $controller->query($input);
+    }
+
     elseif ($path === 'leads' && $method === 'GET') {
         require_once __DIR__ . '/controllers/LeadController.php';
         $controller = new LeadController();
@@ -131,6 +137,26 @@ try {
         require_once __DIR__ . '/controllers/ClientController.php';
         $controller = new ClientController();
         $controller->store($input);
+    }
+
+    elseif ((preg_match('#^clients/files/(\d+)/leads$#', $path, $matches) || preg_match('#^client-files/(\d+)/leads$#', $path, $matches)) && $method === 'GET') {
+        require_once __DIR__ . '/controllers/ClientController.php';
+        $controller = new ClientController();
+        $controller->fileLeads((int)$matches[1]);
+    }
+
+    elseif ((preg_match('#^clients/files/(\d+)$#', $path, $matches) && $method === 'DELETE') || ($path === 'clients/files/delete' && $method === 'POST')) {
+        require_once __DIR__ . '/controllers/ClientController.php';
+        $controller = new ClientController();
+        $fileId = isset($matches[1]) ? (int)$matches[1] : (int)($input['id'] ?? $input['file_id'] ?? 0);
+        $controller->deleteFile($fileId);
+    }
+
+    elseif ((preg_match('#^clients/files/(\d+)$#', $path, $matches) && ($method === 'PUT' || $method === 'POST')) || ($path === 'clients/files/update' && $method === 'POST')) {
+        require_once __DIR__ . '/controllers/ClientController.php';
+        $controller = new ClientController();
+        $fileId = isset($matches[1]) ? (int)$matches[1] : (int)($input['id'] ?? $input['file_id'] ?? 0);
+        $controller->updateFile($fileId, $input);
     }
 
     elseif ((preg_match('#^clients/(\d+)/files$#', $path, $matches) || $path === 'clients/files') && $method === 'POST') {

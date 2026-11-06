@@ -1,9 +1,10 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Windows;
 using System.Windows.Input;
 using ClosedXML.Excel;
 using LeadManagement.Desktop.Models;
@@ -54,6 +55,16 @@ namespace LeadManagement.Desktop.ViewModels
         private bool _isBannerVisible;
         private bool _isBannerError;
 
+        // Preview state
+        private bool _isPreviewOpen;
+        private string _previewTitle = string.Empty;
+        private string _previewSubtitle = string.Empty;
+        private string _previewSearchText = string.Empty;
+        private bool _isLoadingPreview;
+        private ObservableCollection<LeadModel> _previewLeads = new();
+        private ObservableCollection<LeadModel> _filteredPreviewLeads = new();
+        private List<LeadModel> _allPreviewLeads = new();
+
         // The full agent list (all role=user accounts) — loaded once
         private List<UserModel> _allAgents = new();
 
@@ -75,6 +86,9 @@ namespace LeadManagement.Desktop.ViewModels
             ToggleAssignDropdownCommand = new RelayCommand<ClientModel>(ExecuteToggleAssignDropdown);
             SaveAgentAssignmentCommand  = new RelayCommand<ClientModel>(async c => await ExecuteSaveAgentAssignmentAsync(c));
             DeleteClientCommand  = new RelayCommand<ClientModel>(async c => await ExecuteDeleteClientAsync(c));
+            DeleteFileCommand    = new RelayCommand<ClientFileModel>(async f => await ExecuteDeleteFileAsync(f));
+            PreviewFileCommand   = new RelayCommand<ClientFileModel>(async f => await ExecutePreviewFileAsync(f));
+            ClosePreviewCommand  = new RelayCommand(ExecuteClosePreview);
             DismissBannerCommand = new RelayCommand(ExecuteDismissBanner);
         }
 
@@ -161,6 +175,47 @@ namespace LeadManagement.Desktop.ViewModels
 
         public bool HasNoAgents => _allAgents.Count == 0;
 
+        // --- Preview Properties ---
+        public bool IsPreviewOpen
+        {
+            get => _isPreviewOpen;
+            set => SetProperty(ref _isPreviewOpen, value);
+        }
+
+        public string PreviewTitle
+        {
+            get => _previewTitle;
+            set => SetProperty(ref _previewTitle, value);
+        }
+
+        public string PreviewSubtitle
+        {
+            get => _previewSubtitle;
+            set => SetProperty(ref _previewSubtitle, value);
+        }
+
+        public string PreviewSearchText
+        {
+            get => _previewSearchText;
+            set
+            {
+                if (SetProperty(ref _previewSearchText, value))
+                    ApplyPreviewSearch();
+            }
+        }
+
+        public bool IsLoadingPreview
+        {
+            get => _isLoadingPreview;
+            set => SetProperty(ref _isLoadingPreview, value);
+        }
+
+        public ObservableCollection<LeadModel> FilteredPreviewLeads
+        {
+            get => _filteredPreviewLeads;
+            set => SetProperty(ref _filteredPreviewLeads, value);
+        }
+
         // ----------------------------------------------------------------
         // Commands
         // ----------------------------------------------------------------
@@ -174,6 +229,9 @@ namespace LeadManagement.Desktop.ViewModels
         public ICommand ToggleAssignDropdownCommand { get; }
         public ICommand SaveAgentAssignmentCommand { get; }
         public ICommand DeleteClientCommand { get; }
+        public ICommand DeleteFileCommand { get; }
+        public ICommand PreviewFileCommand { get; }
+        public ICommand ClosePreviewCommand { get; }
         public ICommand DismissBannerCommand { get; }
 
         // ----------------------------------------------------------------
@@ -325,7 +383,7 @@ namespace LeadManagement.Desktop.ViewModels
             await ProcessFileUploadAsync(client, dialog.FileName);
         }
 
-        // Called from View code-behind on drag-drop
+        // Called from View code-behind on drag-drop (kept for backward compat)
         public async Task HandleDroppedFileAsync(ClientModel client, string filePath)
         {
             var ext = Path.GetExtension(filePath).ToLowerInvariant();
@@ -382,6 +440,106 @@ namespace LeadManagement.Desktop.ViewModels
         }
 
         // ----------------------------------------------------------------
+        // Delete file
+        // ----------------------------------------------------------------
+        private async Task ExecuteDeleteFileAsync(ClientFileModel? file)
+        {
+            if (file == null) return;
+
+            var confirm = System.Windows.MessageBox.Show(
+                $"Delete '{file.FileName}'?\n\nThis will permanently remove the file and all {file.TotalLeads:N0} leads associated with it.",
+                "Delete File",
+                System.Windows.MessageBoxButton.YesNo,
+                System.Windows.MessageBoxImage.Warning);
+
+            if (confirm != System.Windows.MessageBoxResult.Yes) return;
+
+            var (ok, msg) = await ApiService.Instance.DeleteClientFileAsync(file.Id);
+            if (ok)
+            {
+                // If the preview is open for this file, close it
+                if (IsPreviewOpen && PreviewTitle.Contains(file.FileName))
+                    ExecuteClosePreview();
+
+                ShowBanner($"✓ File '{file.FileName}' and its leads were deleted.", isError: false);
+                await LoadClientsAsync(preserveBanner: true);
+            }
+            else
+            {
+                ShowBanner($"Delete failed: {msg}", isError: true);
+            }
+        }
+
+        // ----------------------------------------------------------------
+        // Preview file leads
+        // ----------------------------------------------------------------
+        private async Task ExecutePreviewFileAsync(ClientFileModel? file)
+        {
+            if (file == null) return;
+
+            IsLoadingPreview = true;
+            IsPreviewOpen    = true;
+            PreviewTitle     = file.FileName;
+            PreviewSubtitle  = $"{file.ClientName}  ·  {file.TotalLeads:N0} leads  ·  {file.FileSize}  ·  {file.FormattedDate}";
+            PreviewSearchText = string.Empty;
+            _allPreviewLeads.Clear();
+            FilteredPreviewLeads = new ObservableCollection<LeadModel>();
+
+            try
+            {
+                var (ok, msg, data) = await ApiService.Instance.GetClientFileLeadsAsync(file.Id);
+                if (ok && data?.Leads != null)
+                {
+                    _allPreviewLeads = data.Leads;
+                    PreviewSubtitle  = $"{file.ClientName}  ·  {_allPreviewLeads.Count:N0} leads  ·  {file.FileSize}  ·  {file.FormattedDate}";
+                    ApplyPreviewSearch();
+                }
+                else
+                {
+                    ShowBanner($"Could not load preview: {msg}", isError: true);
+                    IsPreviewOpen = false;
+                }
+            }
+            catch (Exception ex)
+            {
+                ShowBanner($"Preview error: {ex.Message}", isError: true);
+                IsPreviewOpen = false;
+            }
+            finally
+            {
+                IsLoadingPreview = false;
+            }
+        }
+
+        private void ApplyPreviewSearch()
+        {
+            var q = PreviewSearchText?.Trim() ?? string.Empty;
+            if (string.IsNullOrEmpty(q))
+            {
+                FilteredPreviewLeads = new ObservableCollection<LeadModel>(_allPreviewLeads);
+            }
+            else
+            {
+                var filtered = _allPreviewLeads.Where(l =>
+                    (l.BusinessName?.Contains(q, StringComparison.OrdinalIgnoreCase) == true) ||
+                    (l.ContactName?.Contains(q, StringComparison.OrdinalIgnoreCase) == true) ||
+                    (l.City?.Contains(q, StringComparison.OrdinalIgnoreCase) == true) ||
+                    (l.State?.Contains(q, StringComparison.OrdinalIgnoreCase) == true) ||
+                    (l.CellNumber?.Contains(q, StringComparison.OrdinalIgnoreCase) == true) ||
+                    (l.Status?.Contains(q, StringComparison.OrdinalIgnoreCase) == true));
+                FilteredPreviewLeads = new ObservableCollection<LeadModel>(filtered);
+            }
+        }
+
+        private void ExecuteClosePreview()
+        {
+            IsPreviewOpen = false;
+            PreviewSearchText = string.Empty;
+            _allPreviewLeads.Clear();
+            FilteredPreviewLeads = new ObservableCollection<LeadModel>();
+        }
+
+        // ----------------------------------------------------------------
         // Assign agents dropdown
         // ----------------------------------------------------------------
         private void ExecuteToggleAssignDropdown(ClientModel? client)
@@ -434,9 +592,20 @@ namespace LeadManagement.Desktop.ViewModels
         {
             if (client == null) return;
 
+            var confirm = System.Windows.MessageBox.Show(
+                $"Delete client '{client.FullName}'?\n\nThis will permanently remove the client and all {client.FileCount} file(s) with {client.TotalLeads:N0} leads.",
+                "Delete Client",
+                System.Windows.MessageBoxButton.YesNo,
+                System.Windows.MessageBoxImage.Warning);
+
+            if (confirm != System.Windows.MessageBoxResult.Yes) return;
+
             var (ok, msg) = await ApiService.Instance.DeleteClientAsync(client.Id);
             if (ok)
             {
+                if (IsPreviewOpen)
+                    ExecuteClosePreview();
+
                 ShowBanner($"✓ Client '{client.FullName}' and all associated files deleted.", isError: false);
                 await LoadClientsAsync(preserveBanner: true);
             }

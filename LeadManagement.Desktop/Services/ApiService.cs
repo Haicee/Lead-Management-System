@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
@@ -284,6 +284,45 @@ namespace LeadManagement.Desktop.Services
         }
 
         /// <summary>
+        /// Sends advanced multi-filter and paginated query request to POST /leads/query.
+        /// High performance server-side filtering and slicing across hundreds of thousands of records.
+        /// </summary>
+        public async Task<(bool Success, string Message, LeadQueryResultData? Data)> QueryLeadsAsync(
+            LeadQueryRequest request,
+            System.Threading.CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                var json = JsonSerializer.Serialize(request);
+                var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+                var response = await _httpClient.PostAsync("leads/query", content, cancellationToken);
+                var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
+
+                var result = JsonSerializer.Deserialize<ApiResponse<LeadQueryResultData>>(responseBody);
+
+                if (result == null)
+                {
+                    return (false, "Unable to parse server response.", null);
+                }
+
+                return (result.Success, result.Message, result.Data);
+            }
+            catch (OperationCanceledException)
+            {
+                return (false, "Query was cancelled.", null);
+            }
+            catch (HttpRequestException)
+            {
+                return (false, "Cannot connect to server. Please ensure XAMPP Apache & MySQL are running.", null);
+            }
+            catch (Exception ex)
+            {
+                return (false, $"Error querying leads: {ex.Message}", null);
+            }
+        }
+
+        /// <summary>
         /// Fetches all import batches for the Import History page.
         /// </summary>
         public async Task<(bool Success, string Message, System.Collections.Generic.List<ImportBatchModel>? Batches)> GetBatchesAsync()
@@ -524,6 +563,39 @@ namespace LeadManagement.Desktop.Services
             }
             catch (HttpRequestException) { return (false, "Cannot connect to server. Please ensure XAMPP Apache & MySQL are running."); }
             catch (Exception ex) { return (false, $"Error assigning agents: {ex.Message}"); }
+        }
+
+        /// <summary>Deletes a specific client file and its leads via POST /clients/files/delete.</summary>
+        public async Task<(bool Success, string Message)> DeleteClientFileAsync(int fileId)
+        {
+            try
+            {
+                var payload = new { id = fileId };
+                var json = JsonSerializer.Serialize(payload);
+                var content = new StringContent(json, Encoding.UTF8, "application/json");
+                var response = await _httpClient.PostAsync("clients/files/delete", content);
+                var responseBody = await response.Content.ReadAsStringAsync();
+                var result = JsonSerializer.Deserialize<ApiResponse<object>>(responseBody);
+                if (result == null) return (false, "Unable to parse server response.");
+                return (result.Success, result.Message);
+            }
+            catch (HttpRequestException) { return (false, "Cannot connect to server. Please ensure XAMPP Apache & MySQL are running."); }
+            catch (Exception ex) { return (false, $"Error deleting file: {ex.Message}"); }
+        }
+
+        /// <summary>Retrieves leads for a specific client file via GET /clients/files/{id}/leads.</summary>
+        public async Task<(bool Success, string Message, ClientFileLeadsData? Data)> GetClientFileLeadsAsync(int fileId)
+        {
+            try
+            {
+                var response = await _httpClient.GetAsync($"clients/files/{fileId}/leads");
+                var responseBody = await response.Content.ReadAsStringAsync();
+                var result = JsonSerializer.Deserialize<ApiResponse<ClientFileLeadsData>>(responseBody);
+                if (result == null) return (false, "Unable to parse server response.", null);
+                return (result.Success, result.Message, result.Data);
+            }
+            catch (HttpRequestException) { return (false, "Cannot connect to server. Please ensure XAMPP Apache & MySQL are running.", null); }
+            catch (Exception ex) { return (false, $"Error fetching file leads: {ex.Message}", null); }
         }
 
         /// <summary>Deletes a client and all associated data via POST /clients/delete.</summary>
