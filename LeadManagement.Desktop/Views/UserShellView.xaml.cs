@@ -1,4 +1,6 @@
+using System.Windows;
 using System.Windows.Controls;
+using LeadManagement.Desktop.ViewModels;
 
 namespace LeadManagement.Desktop.Views
 {
@@ -8,6 +10,16 @@ namespace LeadManagement.Desktop.Views
         {
             InitializeComponent();
         }
+
+        private async void UserShellView_Loaded(object sender, RoutedEventArgs e)
+        {
+            if (DataContext is MainViewModel mainVm)
+            {
+                if (mainVm.UserDashboard.AssignedClients.Count == 0)
+                {
+                    await mainVm.UserDashboard.LoadAssignedClientsAsync();
+                }
+            }
+        }
     }
 }
-

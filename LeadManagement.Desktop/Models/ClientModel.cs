@@ -19,6 +19,7 @@ namespace LeadManagement.Desktop.Models
         private string _updatedAt = string.Empty;
         private List<ClientFileModel> _files = new();
         private List<UserModel> _assignedAgents = new();
+        private string? _assignedAt;
         private bool _isExpanded;
         private bool _isAssignDropdownOpen;
         private ObservableCollection<object> _agentSelectionItems = new();
@@ -28,6 +29,19 @@ namespace LeadManagement.Desktop.Models
         {
             get => _id;
             set => SetProperty(ref _id, value);
+        }
+
+        [JsonPropertyName("assigned_at")]
+        public string? AssignedAt
+        {
+            get => _assignedAt;
+            set
+            {
+                if (SetProperty(ref _assignedAt, value))
+                {
+                    OnPropertyChanged(nameof(FormattedAssignedDate));
+                }
+            }
         }
 
         [JsonPropertyName("first_name")]
@@ -127,6 +141,19 @@ namespace LeadManagement.Desktop.Models
                 if (DateTime.TryParse(CreatedAt, out var dt))
                     return dt.ToString("MMM dd, yyyy");
                 return CreatedAt;
+            }
+            set { }
+        }
+
+        [JsonIgnore]
+        public string FormattedAssignedDate
+        {
+            get
+            {
+                if (string.IsNullOrWhiteSpace(AssignedAt)) return FormattedCreatedDate;
+                if (DateTime.TryParse(AssignedAt, out var dt))
+                    return dt.ToString("MMM dd, yyyy");
+                return AssignedAt;
             }
             set { }
         }

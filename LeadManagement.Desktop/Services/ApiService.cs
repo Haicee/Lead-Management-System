@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
@@ -453,13 +453,20 @@ namespace LeadManagement.Desktop.Services
         // =========================================================
 
         /// <summary>
-        /// Fetches all clients (with their files and assigned agents) from GET /clients.
+        /// Fetches clients (with their files and assigned agents) from GET /clients.
+        /// If agentId is provided, returns only clients assigned to that agent.
         /// </summary>
-        public async Task<(bool Success, string Message, System.Collections.Generic.List<ClientModel>? Clients)> GetClientsAsync()
+        public async Task<(bool Success, string Message, System.Collections.Generic.List<ClientModel>? Clients)> GetClientsAsync(int? agentId = null)
         {
             try
             {
-                var response = await _httpClient.GetAsync("clients");
+                var url = "clients";
+                if (agentId.HasValue && agentId.Value > 0)
+                {
+                    url += $"?agent_id={agentId.Value}";
+                }
+
+                var response = await _httpClient.GetAsync(url);
                 var responseBody = await response.Content.ReadAsStringAsync();
                 var result = JsonSerializer.Deserialize<ApiResponse<System.Collections.Generic.List<ClientModel>>>(responseBody);
                 if (result == null) return (false, "Unable to parse server response.", null);

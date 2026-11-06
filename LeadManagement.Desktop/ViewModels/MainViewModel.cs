@@ -1,4 +1,4 @@
-﻿using System.Windows.Input;
+using System.Windows.Input;
 using LeadManagement.Desktop.Services;
 
 namespace LeadManagement.Desktop.ViewModels
@@ -277,6 +277,7 @@ namespace LeadManagement.Desktop.ViewModels
                     {
                         CurrentView = "UserDashboard";
                         UserDashboard.CurrentUserView = "UserDashboard";
+                        _ = UserDashboard.LoadAssignedClientsAsync();
                     }
                 }
                 else
@@ -302,6 +303,7 @@ namespace LeadManagement.Desktop.ViewModels
             ActiveUser = string.Empty;
             ActiveUserRole = string.Empty;
             CurrentView = "Dashboard";
+            UserDashboard.Reset();
         }
 
         private void ExecuteNavigate(object? parameter)

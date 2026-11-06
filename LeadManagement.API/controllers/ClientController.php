@@ -17,46 +17,83 @@ class ClientController
     /**
      * GET /clients
      * 
-     * Returns all clients with their files and assigned agents.
+     * Returns clients with their files and assigned agents.
+     * If 'agent_id' or 'user_id' query param is provided, returns only clients assigned to that agent.
      */
     public function index(): void
     {
-        $stmt = $this->db->query("
-            SELECT id, first_name, last_name, created_at, updated_at
-            FROM `clients`
+        $agentId = isset($_GET['agent_id']) ? (int) $_GET['agent_id'] : (isset($_GET['user_id']) ? (int) $_GET['user_id'] : 0);
+
+        if ($agentId > 0) {
+            $stmt = $this->db->prepare("
+                SELECT c.id, c.first_name, c.last_name, c.created_at, c.updated_at, ca.assigned_at
+                FROM `clients` c
+                INNER JOIN `client_agents` ca ON c.id = ca.client_id
+                WHERE ca.user_id = ?
+                ORDER BY c.id DESC
+            ");
+            $stmt->execute([$agentId]);
+            $clients = $stmt->fetchAll();
+        } else {
+            $stmt = $this->db->query("
+                SELECT id, first_name, last_name, created_at, updated_at
+                FROM `clients`
+                ORDER BY `id` DESC
+            ");
+            $clients = $stmt->fetchAll();
+        }
+
+        if (empty($clients)) {
+            Response::success([], 'Clients retrieved successfully');
+            return;
+        }
+
+        $clientIds = array_column($clients, 'id');
+        $placeholders = implode(',', array_fill(0, count($clientIds), '?'));
+
+        // 1. Bulk-fetch all files for these clients in 1 indexed query
+        $stmtFiles = $this->db->prepare("
+            SELECT id, client_id, client_name, file_name, file_size, total_leads, batch_id, created_at
+            FROM `client_files`
+            WHERE `client_id` IN ($placeholders)
             ORDER BY `id` DESC
         ");
-        $clients = $stmt->fetchAll();
+        $stmtFiles->execute($clientIds);
+        $allFiles = $stmtFiles->fetchAll();
 
-        // Attach files and assigned agents for each client
+        $filesByClient = [];
+        foreach ($allFiles as $file) {
+            $filesByClient[$file['client_id']][] = $file;
+        }
+
+        // 2. Bulk-fetch all assigned agents for these clients in 1 indexed query
+        $stmtAgents = $this->db->prepare("
+            SELECT ca.client_id, u.id, u.username, u.full_name, u.email, u.role
+            FROM `client_agents` ca
+            INNER JOIN `users` u ON ca.user_id = u.id
+            WHERE ca.client_id IN ($placeholders)
+            ORDER BY u.full_name ASC
+        ");
+        $stmtAgents->execute($clientIds);
+        $allAgents = $stmtAgents->fetchAll();
+
+        $agentsByClient = [];
+        foreach ($allAgents as $agent) {
+            $cId = $agent['client_id'];
+            unset($agent['client_id']);
+            $agentsByClient[$cId][] = $agent;
+        }
+
+        // 3. Assemble complete client objects
         foreach ($clients as &$client) {
             $clientId = (int) $client['id'];
             $client['full_name'] = trim($client['first_name'] . ' ' . $client['last_name']);
 
-            // 1. Files uploaded for this client
-            $stmtFiles = $this->db->prepare("
-                SELECT id, client_id, client_name, file_name, file_size, total_leads, batch_id, created_at
-                FROM `client_files`
-                WHERE `client_id` = ?
-                ORDER BY `id` DESC
-            ");
-            $stmtFiles->execute([$clientId]);
-            $files = $stmtFiles->fetchAll();
-
+            $files = $filesByClient[$clientId] ?? [];
             $client['files'] = $files;
             $client['file_count'] = count($files);
             $client['total_leads'] = (int) array_sum(array_column($files, 'total_leads'));
-
-            // 2. Assigned agents (Users with role = 'user' assigned to this client)
-            $stmtAgents = $this->db->prepare("
-                SELECT u.id, u.username, u.full_name, u.email, u.role
-                FROM `client_agents` ca
-                INNER JOIN `users` u ON ca.user_id = u.id
-                WHERE ca.client_id = ?
-                ORDER BY u.full_name ASC
-            ");
-            $stmtAgents->execute([$clientId]);
-            $client['assigned_agents'] = $stmtAgents->fetchAll();
+            $client['assigned_agents'] = $agentsByClient[$clientId] ?? [];
         }
 
         Response::success($clients, 'Clients retrieved successfully');
