@@ -4,8 +4,9 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:vm="clr-namespace:LeadManagement.Desktop.ViewModels"
+             xmlns:models="clr-namespace:LeadManagement.Desktop.Models"
              mc:Ignorable="d"
-             d:DesignHeight="850" d:DesignWidth="1200"
+             d:DesignHeight="900" d:DesignWidth="1250"
              FontFamily="{StaticResource AppFontFamily}"
              Loaded="ManageClientsView_Loaded">
 
@@ -39,6 +40,33 @@
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
                                 <Setter TargetName="bd" Property="Background" Value="#FECACA"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Centered DataGrid cell style – fixes vertical alignment for all cell types -->
+        <Style x:Key="CenteredCellStyle" TargetType="DataGridCell">
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="DataGridCell">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                Padding="6,0"
+                                SnapsToDevicePixels="True">
+                            <ContentPresenter VerticalAlignment="Center" SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter Property="Background" Value="#EFF6FF"/>
+                                <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -102,7 +130,7 @@
                     Width="420" VerticalAlignment="Center" HorizontalAlignment="Center"
                     BorderBrush="{StaticResource BorderBrush}" BorderThickness="1">
                 <Border.Effect>
-                    <DropShadowEffect Color="#0F172A" BlurRadius="30" ShadowDepth="4" Direction="270" Opacity="0.08"/>
+                    <DropShadowEffect Color="#0F172A" BlurRadius="30" ShadowDepth="4" Direction="270" Opacity="0.12"/>
                 </Border.Effect>
                 <StackPanel>
                     <!-- Modal Header -->
@@ -174,11 +202,11 @@
         <Border Background="#770F172A"
                 Panel.ZIndex="40"
                 Visibility="{Binding IsPreviewOpen, Converter={StaticResource BooleanToVisibilityConverter}}">
-            <Border Background="#F8FAFC" CornerRadius="12" Margin="32"
+            <Border Background="White" CornerRadius="12" Margin="32"
                     BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
                     VerticalAlignment="Stretch" HorizontalAlignment="Stretch">
                 <Border.Effect>
-                    <DropShadowEffect Color="#0F172A" BlurRadius="40" ShadowDepth="6" Direction="270" Opacity="0.10"/>
+                    <DropShadowEffect Color="#0F172A" BlurRadius="40" ShadowDepth="6" Direction="270" Opacity="0.14"/>
                 </Border.Effect>
                 <Grid>
                     <Grid.RowDefinitions>
@@ -205,11 +233,15 @@
                                 <TextBlock Text="{Binding PreviewSubtitle}" FontSize="12"
                                            Foreground="{StaticResource TextSecondaryBrush}" Margin="0,2,0,0"/>
                             </StackPanel>
-                            <Button Grid.Column="2" Command="{Binding ClosePreviewCommand}"
-                                    Background="Transparent" BorderThickness="0" Cursor="Hand" Padding="8"
-                                    VerticalAlignment="Top">
-                                <TextBlock Text="✕" FontSize="14" Foreground="#94A3B8"/>
-                            </Button>
+                            <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                                <Border Background="#ECFDF5" BorderBrush="#A7F3D0" BorderThickness="1" CornerRadius="8" Padding="8,3" Margin="0,0,12,0">
+                                    <TextBlock Text="⚡ Real-time Sync Active" FontSize="11" Foreground="#047857" FontWeight="SemiBold"/>
+                                </Border>
+                                <Button Command="{Binding ClosePreviewCommand}"
+                                        Background="Transparent" BorderThickness="0" Cursor="Hand" Padding="8">
+                                    <TextBlock Text="✕" FontSize="14" Foreground="#94A3B8"/>
+                                </Button>
+                            </StackPanel>
                         </Grid>
                     </Border>
 
@@ -222,7 +254,7 @@
                             <TextBlock Text="🔍" Foreground="#94A3B8" FontSize="13"
                                        VerticalAlignment="Center" HorizontalAlignment="Left" Margin="12,0,0,0"
                                        IsHitTestVisible="False"/>
-                            <TextBlock Text="Search business name, contact, city, state, phone…"
+                            <TextBlock Text="Search business name, contact, phone, disposition, agent, notes…"
                                        Foreground="#94A3B8" FontSize="13"
                                        VerticalAlignment="Center" Margin="38,0,0,0"
                                        IsHitTestVisible="False">
@@ -249,15 +281,14 @@
                             VerticalAlignment="Center" HorizontalAlignment="Center">
                         <StackPanel>
                             <TextBlock Text="⏳" FontSize="32" HorizontalAlignment="Center" Margin="0,0,0,10"/>
-                            <TextBlock Text="Loading leads…" FontSize="13" Foreground="#64748B" HorizontalAlignment="Center"/>
+                            <TextBlock Text="Loading leads data…" FontSize="13" Foreground="#64748B" HorizontalAlignment="Center"/>
                         </StackPanel>
                     </Border>
 
-                    <!-- Data Grid -->
+                    <!-- Preview Data Grid (With Editable Columns First) -->
                     <DataGrid Grid.Row="2"
                               ItemsSource="{Binding FilteredPreviewLeads}"
                               AutoGenerateColumns="False"
-                              IsReadOnly="True"
                               CanUserAddRows="False"
                               CanUserDeleteRows="False"
                               SelectionMode="Single"
@@ -269,16 +300,273 @@
                               BorderThickness="0"
                               ColumnHeaderStyle="{StaticResource ModernDataGridColumnHeaderStyle}"
                               RowStyle="{StaticResource ModernDataGridRowStyle}"
+                              CellStyle="{StaticResource CenteredCellStyle}"
                               AlternationCount="2"
+                              RowHeight="40"
+                              EnableRowVirtualization="True"
+                              VirtualizingPanel.IsVirtualizing="True"
+                              VirtualizingPanel.VirtualizationMode="Standard"
+                              VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Auto"
                               Visibility="{Binding IsLoadingPreview, Converter={StaticResource InverseBoolToVisibilityConverter}}">
                         <DataGrid.Columns>
-                            <DataGridTextColumn Header="Business Name"  Binding="{Binding BusinessName}"  Width="2*"/>
-                            <DataGridTextColumn Header="Contact"        Binding="{Binding ContactName}"   Width="1.5*"/>
-                            <DataGridTextColumn Header="City"           Binding="{Binding City}"          Width="*"/>
-                            <DataGridTextColumn Header="State"          Binding="{Binding State}"         Width="60"/>
-                            <DataGridTextColumn Header="Phone"          Binding="{Binding CellNumber}"    Width="*"/>
-                            <DataGridTextColumn Header="Status"         Binding="{Binding Status}"        Width="*"/>
-                            <DataGridTextColumn Header="Industry"       Binding="{Binding SicDescription}" Width="1.5*"/>
+                            <!-- 1. DATE with Calendar Picker -->
+                            <DataGridTemplateColumn Header="DATE" Width="135" CanUserSort="True" SortMemberPath="CallDate">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <DatePicker SelectedDate="{Binding SelectedDate, Mode=OneWay}"
+                                                    Height="28" VerticalAlignment="Center" VerticalContentAlignment="Center"
+                                                    BorderBrush="#CBD5E1" Background="White" Padding="4,1"
+                                                    ToolTip="Pick a date for this call"
+                                                    SelectedDateChanged="DatePicker_SelectedDateChanged"/>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+
+                            <!-- 2. CALL DISPOSITION Dropdown with Color Coding -->
+                            <DataGridTemplateColumn Header="CALL DISPOSITION" Width="190" CanUserSort="True" SortMemberPath="CallDisposition">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <ComboBox ItemsSource="{Binding Source={x:Static models:CallDispositionHelper.Dispositions}}"
+                                                  SelectedValue="{Binding CallDisposition, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                  SelectedValuePath="Name"
+                                                  Height="30" VerticalAlignment="Center"
+                                                  BorderBrush="#CBD5E1" Background="White">
+                                            <ComboBox.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Border Background="{Binding BackgroundHex}"
+                                                            BorderBrush="{Binding BorderHex}"
+                                                            BorderThickness="1" CornerRadius="8"
+                                                            Padding="8,3" Margin="0,1" HorizontalAlignment="Stretch">
+                                                        <TextBlock Text="{Binding Name}"
+                                                                   Foreground="{Binding ForegroundHex}"
+                                                                   FontWeight="SemiBold" FontSize="11.5"/>
+                                                    </Border>
+                                                </DataTemplate>
+                                            </ComboBox.ItemTemplate>
+                                        </ComboBox>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+
+                            <!-- 3. AGENT Assigned Dropdown (Specific to this client) -->
+                            <DataGridTemplateColumn Header="AGENT" Width="150" CanUserSort="True" SortMemberPath="AssignedAgent">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <ComboBox ItemsSource="{Binding AvailableAgentOptions}"
+                                                  SelectedItem="{Binding AssignedAgent, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                  Height="30" VerticalAlignment="Center"
+                                                  BorderBrush="#CBD5E1" Background="White">
+                                            <ComboBox.ItemTemplate>
+                                                <DataTemplate>
+                                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                        <TextBlock Text="👤 " FontSize="11" Foreground="#64748B"/>
+                                                        <TextBlock Text="{Binding}" FontSize="12" Foreground="#0F172A" FontWeight="Medium"/>
+                                                    </StackPanel>
+                                                </DataTemplate>
+                                            </ComboBox.ItemTemplate>
+                                        </ComboBox>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+
+                            <!-- 4. NOTES (Editable) -->
+                            <DataGridTemplateColumn Header="NOTES" Width="220" CanUserSort="True" SortMemberPath="Notes">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <TextBox Text="{Binding Notes, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                                                 Height="28" VerticalContentAlignment="Center"
+                                                 Padding="6,2" BorderBrush="#CBD5E1" BorderThickness="1"
+                                                 Background="White" FontSize="12"
+                                                 ToolTip="{Binding Notes}"/>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+
+                            <!-- 5. OF CAL (# of Calls - Editable) -->
+                            <DataGridTemplateColumn Header="OF CAL" Width="85" CanUserSort="True" SortMemberPath="CallCount">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <TextBox Text="{Binding CallCount, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                                                 Height="28" Width="55" TextAlignment="Center"
+                                                 VerticalContentAlignment="Center"
+                                                 BorderBrush="#CBD5E1" BorderThickness="1"
+                                                 Background="White" FontSize="12" FontWeight="SemiBold"
+                                                 ToolTip="Number of calls made to this lead"/>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+
+                            <!-- 6. CELL NUMBER -->
+                            <DataGridTextColumn Header="CELL NUMBER" Binding="{Binding FormattedPhone}" Width="125" IsReadOnly="True">
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="VerticalAlignment" Value="Center"/>
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
+
+                            <!-- 7. BUSINESS NAME -->
+                            <DataGridTextColumn Header="BUSINESS NAME" Binding="{Binding BusinessName}" Width="210" IsReadOnly="True" FontWeight="SemiBold">
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="VerticalAlignment" Value="Center"/>
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
+
+                            <!-- 8. TITLE -->
+                            <DataGridTextColumn Header="TITLE" Binding="{Binding Title}" Width="120" IsReadOnly="True">
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="VerticalAlignment" Value="Center"/>
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
+
+                            <!-- 9. CONTACT NAME -->
+                            <DataGridTextColumn Header="CONTACT NAME" Binding="{Binding ContactName}" Width="150" IsReadOnly="True">
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="VerticalAlignment" Value="Center"/>
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
+
+                            <!-- 10. EMAIL -->
+                            <DataGridTextColumn Header="EMAIL" Binding="{Binding Email}" Width="170" IsReadOnly="True">
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="VerticalAlignment" Value="Center"/>
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
+
+                            <!-- 11. ADDRESS -->
+                            <DataGridTextColumn Header="ADDRESS" Binding="{Binding Address}" Width="190" IsReadOnly="True">
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="VerticalAlignment" Value="Center"/>
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
+
+                            <!-- 12. CITY -->
+                            <DataGridTextColumn Header="CITY" Binding="{Binding City}" Width="110" IsReadOnly="True">
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="VerticalAlignment" Value="Center"/>
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
+
+                            <!-- 13. COUNTY -->
+                            <DataGridTextColumn Header="COUNTY" Binding="{Binding County}" Width="110" IsReadOnly="True">
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="VerticalAlignment" Value="Center"/>
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
+
+                            <!-- 14. STATE -->
+                            <DataGridTextColumn Header="STATE" Binding="{Binding State}" Width="65" IsReadOnly="True">
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="VerticalAlignment" Value="Center"/>
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
+
+                            <!-- 15. ZIP CODE -->
+                            <DataGridTextColumn Header="ZIP CODE" Binding="{Binding ZipCode}" Width="85" IsReadOnly="True">
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="VerticalAlignment" Value="Center"/>
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
+
+                            <!-- 16. FAX -->
+                            <DataGridTextColumn Header="FAX" Binding="{Binding Fax}" Width="110" IsReadOnly="True">
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="VerticalAlignment" Value="Center"/>
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
+
+                            <!-- 17. ANNUAL SALES -->
+                            <DataGridTextColumn Header="ANNUAL SALES" Binding="{Binding AnnualSales}" Width="140" IsReadOnly="True">
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="VerticalAlignment" Value="Center"/>
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
+
+                            <!-- 18. NUMBER OF EMP -->
+                            <DataGridTextColumn Header="NUMBER OF EMP" Binding="{Binding NumberOfEmployees}" Width="115" IsReadOnly="True">
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="VerticalAlignment" Value="Center"/>
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
+
+                            <!-- 19. WEBSITE -->
+                            <DataGridTextColumn Header="WEBSITE" Binding="{Binding Website}" Width="160" IsReadOnly="True">
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="VerticalAlignment" Value="Center"/>
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
+
+                            <!-- 20. SIC CODE -->
+                            <DataGridTextColumn Header="SIC CODE" Binding="{Binding SicCode}" Width="95" IsReadOnly="True">
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="VerticalAlignment" Value="Center"/>
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
+
+                            <!-- 21. SIC DESCRIPTION -->
+                            <DataGridTextColumn Header="SIC DESCRIPTION" Binding="{Binding SicDescription}" Width="180" IsReadOnly="True">
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="VerticalAlignment" Value="Center"/>
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
+
+                            <!-- 22. NAICS CODE -->
+                            <DataGridTextColumn Header="NAICS CODE" Binding="{Binding NaicsCode}" Width="95" IsReadOnly="True">
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="VerticalAlignment" Value="Center"/>
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
+
+                            <!-- 23. NAICS DESCRIPTION -->
+                            <DataGridTextColumn Header="NAICS DESCRIPTION" Binding="{Binding NaicsDescription}" Width="180" IsReadOnly="True">
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="VerticalAlignment" Value="Center"/>
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
+
+                            <!-- 24. STATUS -->
+                            <DataGridTextColumn Header="STATUS" Binding="{Binding Status}" Width="110" IsReadOnly="True">
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="VerticalAlignment" Value="Center"/>
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
                         </DataGrid.Columns>
                     </DataGrid>
 
@@ -333,7 +621,7 @@
                             </TextBlock>
                         </Border>
                     </StackPanel>
-                    <TextBlock Text="Add clients, upload lead files, and assign agents."
+                    <TextBlock Text="Add clients, upload lead files, manage call compositions, and assign agents."
                                FontSize="13" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,4,0,0"/>
                 </StackPanel>
 
@@ -408,10 +696,10 @@
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
                             <!-- CLIENT CARD -->
-                            <Border Background="White" CornerRadius="10" Margin="0,0,0,12"
+                            <Border Background="White" CornerRadius="10" Margin="0,0,0,14"
                                     BorderBrush="{StaticResource BorderBrush}" BorderThickness="1">
                                 <Border.Effect>
-                                    <DropShadowEffect Color="#0F172A" BlurRadius="8" ShadowDepth="1" Direction="270" Opacity="0.04"/>
+                                    <DropShadowEffect Color="#0F172A" BlurRadius="8" ShadowDepth="1" Direction="270" Opacity="0.05"/>
                                 </Border.Effect>
                                 <StackPanel>
                                     <!-- CLIENT CARD HEADER ROW -->
@@ -537,7 +825,7 @@
                                             Padding="16,12"
                                             Visibility="{Binding IsAssignDropdownOpen, Converter={StaticResource BooleanToVisibilityConverter}}">
                                         <StackPanel>
-                                            <TextBlock Text="Select Agents to Assign"
+                                            <TextBlock Text="Select Agents to Assign to this Client"
                                                        FontSize="13" FontWeight="SemiBold"
                                                        Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,10"/>
                                             <ItemsControl ItemsSource="{Binding AgentSelectionItems}">
@@ -572,73 +860,47 @@
                                         </StackPanel>
                                     </Border>
 
-                                    <!-- EXPANDED FILES AREA -->
-                                    <Border Margin="16,0,16,14"
+                                    <!-- EXPANDED CLIENT LEADS AREA -->
+                                    <!-- EXPANDED CLIENT UPLOADED FILES AREA -->
+                                    <Border Margin="16,0,16,16"
                                             Visibility="{Binding IsExpanded, Converter={StaticResource BooleanToVisibilityConverter}}">
                                         <StackPanel>
-                                            <Rectangle Height="1" Fill="{StaticResource BorderBrush}" Margin="0,0,0,12"/>
+                                            <Rectangle Height="1" Fill="{StaticResource BorderBrush}" Margin="0,0,0,14"/>
 
-                                            <!-- Files header row -->
-                                            <Grid Margin="0,0,0,8">
-                                                <TextBlock Text="Uploaded Files" FontSize="12" FontWeight="SemiBold"
-                                                           Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center"/>
-                                            </Grid>
+                                            <TextBlock Text="Uploaded Files" FontSize="13" FontWeight="SemiBold"
+                                                       Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,10"/>
 
-                                            <!-- Empty files state -->
-                                            <Border Background="#F8FAFC" CornerRadius="8" Padding="20,16"
-                                                    BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
-                                                    Margin="0,0,0,0"
-                                                    Visibility="{Binding FileCount, Converter={StaticResource ZeroToVisibilityConverter}, FallbackValue=Collapsed}">
-                                                <StackPanel HorizontalAlignment="Center">
-                                                    <TextBlock Text="📁" FontSize="24" HorizontalAlignment="Center" Margin="0,0,0,6"/>
-                                                    <TextBlock Text="No files uploaded yet." FontSize="12"
-                                                               Foreground="{StaticResource TextSecondaryBrush}"
-                                                               HorizontalAlignment="Center"/>
-                                                    <TextBlock Text="Click '📤 Upload File' above to get started."
-                                                               FontSize="11" Foreground="#94A3B8"
-                                                               HorizontalAlignment="Center" Margin="0,3,0,0"/>
-                                                </StackPanel>
-                                            </Border>
-
-                                            <!-- Uploaded files list -->
+                                            <!-- UPLOADED FILES LIST -->
                                             <ItemsControl ItemsSource="{Binding Files}">
                                                 <ItemsControl.ItemTemplate>
                                                     <DataTemplate>
-                                                        <Border Background="White" CornerRadius="8"
-                                                                BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
-                                                                Padding="14,10" Margin="0,0,0,6">
+                                                        <Border Background="#F8FAFC" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
+                                                                CornerRadius="8" Padding="14,10" Margin="0,0,0,8">
                                                             <Grid>
                                                                 <Grid.ColumnDefinitions>
-                                                                    <ColumnDefinition Width="Auto"/>   <!-- file icon -->
-                                                                    <ColumnDefinition Width="*"/>      <!-- name + meta -->
-                                                                    <ColumnDefinition Width="Auto"/>   <!-- leads badge -->
-                                                                    <ColumnDefinition Width="Auto"/>   <!-- Preview btn -->
-                                                                    <ColumnDefinition Width="Auto"/>   <!-- Delete btn -->
+                                                                    <ColumnDefinition Width="Auto"/> <!-- File Icon -->
+                                                                    <ColumnDefinition Width="*"/>    <!-- Name, Size, Date -->
+                                                                    <ColumnDefinition Width="Auto"/> <!-- Leads Badge -->
+                                                                    <ColumnDefinition Width="Auto"/> <!-- Preview Button -->
+                                                                    <ColumnDefinition Width="Auto"/> <!-- Delete Button -->
                                                                 </Grid.ColumnDefinitions>
 
-                                                                <!-- File icon -->
-                                                                <Border Grid.Column="0" Background="#EFF6FF" CornerRadius="6"
-                                                                        Width="34" Height="34" Margin="0,0,12,0"
-                                                                        VerticalAlignment="Center">
-                                                                    <TextBlock Text="📄" FontSize="16" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                                                </Border>
+                                                                <TextBlock Grid.Column="0" Text="📄" FontSize="20" VerticalAlignment="Center" Margin="0,0,12,0"/>
 
-                                                                <!-- File name + meta -->
                                                                 <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                                                     <TextBlock Text="{Binding FileName}" FontSize="13" FontWeight="SemiBold"
-                                                                               Foreground="{StaticResource TextPrimaryBrush}"
-                                                                               TextTrimming="CharacterEllipsis"/>
-                                                                    <TextBlock FontSize="11" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,2,0,0">
-                                                                        <Run Text="{Binding FileSize, Mode=OneWay}"/>
-                                                                        <Run Text=" · "/>
-                                                                        <Run Text="{Binding FormattedDate, Mode=OneWay}"/>
-                                                                    </TextBlock>
+                                                                               Foreground="{StaticResource TextPrimaryBrush}"/>
+                                                                    <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
+                                                                        <TextBlock Text="{Binding FileSize}" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}"/>
+                                                                        <TextBlock Text=" · " FontSize="11" Foreground="{StaticResource TextSecondaryBrush}"/>
+                                                                        <TextBlock Text="{Binding FormattedDate}" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}"/>
+                                                                    </StackPanel>
                                                                 </StackPanel>
 
-                                                                <!-- Leads count badge -->
+                                                                <!-- Leads badge -->
                                                                 <Border Grid.Column="2" Background="#EFF6FF" BorderBrush="#BFDBFE" BorderThickness="1"
-                                                                        CornerRadius="8" Padding="10,3" Margin="12,0,10,0" VerticalAlignment="Center">
-                                                                    <TextBlock FontSize="11" Foreground="#2563EB" FontWeight="SemiBold">
+                                                                        CornerRadius="6" Padding="8,4" VerticalAlignment="Center" Margin="0,0,12,0">
+                                                                    <TextBlock FontSize="11.5" Foreground="#2563EB" FontWeight="SemiBold">
                                                                         <Run Text="{Binding TotalLeads, Mode=OneWay, StringFormat={}{0:N0}}"/>
                                                                         <Run Text=" leads"/>
                                                                     </TextBlock>
@@ -648,17 +910,18 @@
                                                                 <Button Grid.Column="3"
                                                                         Command="{Binding DataContext.PreviewFileCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                                         CommandParameter="{Binding}"
-                                                                        Style="{StaticResource PreviewButtonStyle}"
-                                                                        Margin="0,0,8,0"
-                                                                        ToolTip="Preview leads in this file">
+                                                                        Style="{StaticResource SecondaryButtonStyle}"
+                                                                        Padding="12,6" Margin="0,0,8,0" FontSize="11.5"
+                                                                        ToolTip="Preview all lead records and edit dispositions, notes, agents">
                                                                     <TextBlock Text="👁 Preview"/>
                                                                 </Button>
 
-                                                                <!-- Delete file button -->
+                                                                <!-- Delete button -->
                                                                 <Button Grid.Column="4"
                                                                         Command="{Binding DataContext.DeleteFileCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                                         CommandParameter="{Binding}"
                                                                         Style="{StaticResource DangerButtonStyle}"
+                                                                        Padding="10,6" FontSize="11.5"
                                                                         ToolTip="Delete this file and all its leads">
                                                                     <TextBlock Text="🗑 Delete"/>
                                                                 </Button>
@@ -667,6 +930,19 @@
                                                     </DataTemplate>
                                                 </ItemsControl.ItemTemplate>
                                             </ItemsControl>
+
+                                            <!-- Empty files placeholder -->
+                                            <Border Background="#F8FAFC" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
+                                                    CornerRadius="8" Padding="20"
+                                                    Visibility="{Binding Files.Count, Converter={StaticResource ZeroToVisibilityConverter}, FallbackValue=Collapsed}">
+                                                <StackPanel HorizontalAlignment="Center">
+                                                    <TextBlock Text="📄" FontSize="28" HorizontalAlignment="Center" Margin="0,0,0,6"/>
+                                                    <TextBlock Text="No files uploaded yet for this client." FontSize="13" FontWeight="SemiBold"
+                                                               Foreground="{StaticResource TextPrimaryBrush}" HorizontalAlignment="Center"/>
+                                                    <TextBlock Text="Click '📤 Upload File' above to import leads." FontSize="12"
+                                                               Foreground="{StaticResource TextSecondaryBrush}" HorizontalAlignment="Center" Margin="0,2,0,0"/>
+                                                </StackPanel>
+                                            </Border>
                                         </StackPanel>
                                     </Border>
 

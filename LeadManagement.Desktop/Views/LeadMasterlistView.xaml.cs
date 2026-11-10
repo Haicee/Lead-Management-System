@@ -36,5 +36,10 @@ namespace LeadManagement.Desktop.Views
                 vm.SortMatchedLeads(sortMemberPath, newDirection);
             }
         }
+
+        private void DataGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+
+        }
     }
 }

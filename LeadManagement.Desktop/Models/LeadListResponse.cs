@@ -54,6 +54,24 @@ namespace LeadManagement.Desktop.Models
         public List<LeadModel> Leads { get; set; } = new();
     }
 
+    /// <summary>
+    /// Response data shape returned by GET /clients/{id}/leads.
+    /// </summary>
+    public class ClientLeadsData
+    {
+        [JsonPropertyName("client_id")]
+        public int ClientId { get; set; }
+
+        [JsonPropertyName("client_name")]
+        public string ClientName { get; set; } = string.Empty;
+
+        [JsonPropertyName("total")]
+        public int Total { get; set; }
+
+        [JsonPropertyName("leads")]
+        public List<LeadModel> Leads { get; set; } = new();
+    }
+
     public class LeadQueryResultData
     {
         [JsonPropertyName("total")]

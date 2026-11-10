@@ -88,6 +88,7 @@ namespace LeadManagement.Desktop.ViewModels
             DeleteClientCommand  = new RelayCommand<ClientModel>(async c => await ExecuteDeleteClientAsync(c));
             DeleteFileCommand    = new RelayCommand<ClientFileModel>(async f => await ExecuteDeleteFileAsync(f));
             PreviewFileCommand   = new RelayCommand<ClientFileModel>(async f => await ExecutePreviewFileAsync(f));
+            RefreshClientLeadsCommand = new RelayCommand<ClientModel>(async c => await LoadClientLeadsAsync(c));
             ClosePreviewCommand  = new RelayCommand(ExecuteClosePreview);
             DismissBannerCommand = new RelayCommand(ExecuteDismissBanner);
         }
@@ -175,6 +176,9 @@ namespace LeadManagement.Desktop.ViewModels
 
         public bool HasNoAgents => _allAgents.Count == 0;
 
+        /// <summary>Master list of color-coded call dispositions matching Google Sheets palette.</summary>
+        public List<CallDispositionItem> CallDispositions => CallDispositionHelper.Dispositions;
+
         // --- Preview Properties ---
         public bool IsPreviewOpen
         {
@@ -231,6 +235,7 @@ namespace LeadManagement.Desktop.ViewModels
         public ICommand DeleteClientCommand { get; }
         public ICommand DeleteFileCommand { get; }
         public ICommand PreviewFileCommand { get; }
+        public ICommand RefreshClientLeadsCommand { get; }
         public ICommand ClosePreviewCommand { get; }
         public ICommand DismissBannerCommand { get; }
 
@@ -280,11 +285,12 @@ namespace LeadManagement.Desktop.ViewModels
                     _agentSelectionMap.Clear();
                     foreach (var client in clients)
                     {
+                        RebuildAgentSelection(client);
                         if (expandedIds.Contains(client.Id))
                         {
                             client.IsExpanded = true;
+                            _ = LoadClientLeadsAsync(client);
                         }
-                        RebuildAgentSelection(client);
                     }
 
                     Clients = new ObservableCollection<ClientModel>(clients);
@@ -358,10 +364,99 @@ namespace LeadManagement.Desktop.ViewModels
         // ----------------------------------------------------------------
         // Expand / Collapse client card
         // ----------------------------------------------------------------
-        private void ExecuteToggleExpand(ClientModel? client)
+        private async void ExecuteToggleExpand(ClientModel? client)
         {
             if (client == null) return;
             client.IsExpanded = !client.IsExpanded;
+            if (client.IsExpanded && (client.Leads == null || client.Leads.Count == 0))
+            {
+                await LoadClientLeadsAsync(client);
+            }
+        }
+
+        public async Task LoadClientLeadsAsync(ClientModel? client)
+        {
+            if (client == null) return;
+            client.IsLoadingLeads = true;
+            try
+            {
+                var (ok, msg, leads) = await ApiService.Instance.GetClientLeadsAsync(client.Id);
+                if (ok && leads != null)
+                {
+                    foreach (var lead in leads)
+                    {
+                        lead.AvailableAgentOptions = client.AssignedAgentNames;
+                        lead.OnFieldChanged = (l, field) => SyncLeadField(l, field);
+                    }
+                    client.Leads = new ObservableCollection<LeadModel>(leads);
+                }
+                else
+                {
+                    client.Leads = new ObservableCollection<LeadModel>();
+                }
+            }
+            catch (Exception ex)
+            {
+                ShowBanner($"Failed to load leads for '{client.FullName}': {ex.Message}", isError: true);
+            }
+            finally
+            {
+                client.IsLoadingLeads = false;
+            }
+        }
+
+        private void SyncLeadField(LeadModel lead, string fieldName)
+        {
+            if (lead == null || lead.Id <= 0) return;
+
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    var payload = new Dictionary<string, object>();
+                    switch (fieldName)
+                    {
+                        case "call_date":
+                            payload["call_date"] = lead.CallDate;
+                            break;
+                        case "call_disposition":
+                            payload["call_disposition"] = lead.CallDisposition;
+                            break;
+                        case "assigned_agent":
+                            payload["assigned_agent"] = lead.AssignedAgent;
+                            var foundAgent = _allAgents.FirstOrDefault(a => a.FullName.Equals(lead.AssignedAgent, StringComparison.OrdinalIgnoreCase));
+                            if (foundAgent != null)
+                            {
+                                payload["assigned_agent_id"] = foundAgent.Id;
+                                lead.AssignedAgentId = foundAgent.Id;
+                            }
+                            else if (string.IsNullOrEmpty(lead.AssignedAgent))
+                            {
+                                payload["assigned_agent_id"] = null!;
+                                lead.AssignedAgentId = null;
+                            }
+                            break;
+                        case "notes":
+                            payload["notes"] = lead.Notes;
+                            break;
+                        case "call_count":
+                            payload["call_count"] = lead.CallCount;
+                            break;
+                        case "email":
+                            payload["email"] = lead.Email;
+                            break;
+                    }
+
+                    if (payload.Count > 0)
+                    {
+                        await ApiService.Instance.UpdateLeadAsync(lead.Id, payload);
+                    }
+                }
+                catch
+                {
+                    // Background sync
+                }
+            });
         }
 
         // ----------------------------------------------------------------
@@ -432,6 +527,12 @@ namespace LeadManagement.Desktop.ViewModels
                 client.IsExpanded = true;
                 ShowBanner($"✓ {leads.Count} leads uploaded to '{client.FullName}' from '{fileInfo.Name}'.", isError: false);
                 await LoadClientsAsync(preserveBanner: true);
+                var updatedClient = Clients.FirstOrDefault(c => c.Id == client.Id);
+                if (updatedClient != null)
+                {
+                    updatedClient.IsExpanded = true;
+                    await LoadClientLeadsAsync(updatedClient);
+                }
             }
             else
             {
@@ -463,6 +564,11 @@ namespace LeadManagement.Desktop.ViewModels
 
                 ShowBanner($"✓ File '{file.FileName}' and its leads were deleted.", isError: false);
                 await LoadClientsAsync(preserveBanner: true);
+                var updatedClient = Clients.FirstOrDefault(c => c.Id == file.ClientId);
+                if (updatedClient != null && updatedClient.IsExpanded)
+                {
+                    await LoadClientLeadsAsync(updatedClient);
+                }
             }
             else
             {
@@ -491,6 +597,15 @@ namespace LeadManagement.Desktop.ViewModels
                 if (ok && data?.Leads != null)
                 {
                     _allPreviewLeads = data.Leads;
+                    var client = Clients.FirstOrDefault(c => c.Id == file.ClientId);
+                    var agentNames = client?.AssignedAgentNames ?? new ObservableCollection<string> { "" };
+
+                    foreach (var lead in _allPreviewLeads)
+                    {
+                        lead.AvailableAgentOptions = agentNames;
+                        lead.OnFieldChanged = (l, field) => SyncLeadField(l, field);
+                    }
+
                     PreviewSubtitle  = $"{file.ClientName}  ·  {_allPreviewLeads.Count:N0} leads  ·  {file.FileSize}  ·  {file.FormattedDate}";
                     ApplyPreviewSearch();
                 }
@@ -523,6 +638,10 @@ namespace LeadManagement.Desktop.ViewModels
                 var filtered = _allPreviewLeads.Where(l =>
                     (l.BusinessName?.Contains(q, StringComparison.OrdinalIgnoreCase) == true) ||
                     (l.ContactName?.Contains(q, StringComparison.OrdinalIgnoreCase) == true) ||
+                    (l.Email?.Contains(q, StringComparison.OrdinalIgnoreCase) == true) ||
+                    (l.AssignedAgent?.Contains(q, StringComparison.OrdinalIgnoreCase) == true) ||
+                    (l.CallDisposition?.Contains(q, StringComparison.OrdinalIgnoreCase) == true) ||
+                    (l.Notes?.Contains(q, StringComparison.OrdinalIgnoreCase) == true) ||
                     (l.City?.Contains(q, StringComparison.OrdinalIgnoreCase) == true) ||
                     (l.State?.Contains(q, StringComparison.OrdinalIgnoreCase) == true) ||
                     (l.CellNumber?.Contains(q, StringComparison.OrdinalIgnoreCase) == true) ||
@@ -640,6 +759,27 @@ namespace LeadManagement.Desktop.ViewModels
             _agentSelectionMap[client.Id] = new ObservableCollection<AgentSelectionItem>(
                 items.Cast<AgentSelectionItem>()
             );
+
+            var agentNames = new ObservableCollection<string> { "" };
+            if (client.AssignedAgents != null)
+            {
+                foreach (var agent in client.AssignedAgents)
+                {
+                    if (!string.IsNullOrWhiteSpace(agent.FullName))
+                    {
+                        agentNames.Add(agent.FullName);
+                    }
+                }
+            }
+            client.AssignedAgentNames = agentNames;
+
+            if (client.Leads != null)
+            {
+                foreach (var lead in client.Leads)
+                {
+                    lead.AvailableAgentOptions = client.AssignedAgentNames;
+                }
+            }
         }
 
 
@@ -666,6 +806,11 @@ namespace LeadManagement.Desktop.ViewModels
                 return -1;
             }
 
+            int idxDate     = GetCol("date", "call date");
+            int idxDisp     = GetCol("call disposition", "call composition", "disposition", "composition");
+            int idxAgent    = GetCol("agent assigned", "assigned agent", "agent");
+            int idxNotes    = GetCol("notes", "note");
+            int idxCalls    = GetCol("of cal", "# of cal", "call count", "number of call", "calls");
             int idxBusiness = GetCol("business name","company","business");
             int idxAddress  = GetCol("address","street");
             int idxCity     = GetCol("city");
@@ -673,6 +818,7 @@ namespace LeadManagement.Desktop.ViewModels
             int idxState    = GetCol("state");
             int idxZip      = GetCol("zip code","zip","postal");
             int idxCell     = GetCol("cell number","cell","phone","telephone","mobile");
+            int idxEmail    = GetCol("email","e-mail");
             int idxFax      = GetCol("fax");
             int idxSales    = GetCol("annual sales","sales");
             int idxEmp      = GetCol("number of employee","employees");
@@ -697,9 +843,20 @@ namespace LeadManagement.Desktop.ViewModels
             {
                 if (string.IsNullOrWhiteSpace(line)) continue;
                 var parts = SplitCsvLine(line);
+
+                var rawDate = SafeGet(parts, idxDate, -1);
+                var dateVal = !string.IsNullOrWhiteSpace(rawDate) ? rawDate : string.Empty;
+                var rawCalls = SafeGet(parts, idxCalls, -1);
+                int callCount = int.TryParse(rawCalls, out var cc) && cc > 0 ? cc : 1;
+
                 records.Add(new LeadModel
                 {
                     Id               = rowId++,
+                    CallDate         = dateVal,
+                    CallDisposition  = SafeGet(parts, idxDisp, -1),
+                    AssignedAgent    = SafeGet(parts, idxAgent, -1),
+                    Notes            = SafeGet(parts, idxNotes, -1),
+                    CallCount        = callCount,
                     BusinessName     = SafeGet(parts, idxBusiness, 0, "Unnamed Business"),
                     Address          = SafeGet(parts, idxAddress,  1),
                     City             = SafeGet(parts, idxCity,     2),
@@ -707,6 +864,7 @@ namespace LeadManagement.Desktop.ViewModels
                     State            = SafeGet(parts, idxState,    4, "NE"),
                     ZipCode          = SafeGet(parts, idxZip,      5),
                     CellNumber       = SafeGet(parts, idxCell,     6),
+                    Email            = SafeGet(parts, idxEmail,    -1),
                     Fax              = SafeGet(parts, idxFax,      7),
                     AnnualSales      = SafeGet(parts, idxSales,    8, "Less than 500,000"),
                     NumberOfEmployees= SafeGet(parts, idxEmp,      9, "1 to 4"),
@@ -748,6 +906,11 @@ namespace LeadManagement.Desktop.ViewModels
                 return -1;
             }
 
+            int idxDate     = GetCol("date", "call date");
+            int idxDisp     = GetCol("call disposition", "call composition", "disposition", "composition");
+            int idxAgent    = GetCol("agent assigned", "assigned agent", "agent");
+            int idxNotes    = GetCol("notes", "note");
+            int idxCalls    = GetCol("of cal", "# of cal", "call count", "number of call", "calls");
             int idxBusiness = GetCol("business name","company","business");
             int idxAddress  = GetCol("address","street");
             int idxCity     = GetCol("city");
@@ -755,6 +918,7 @@ namespace LeadManagement.Desktop.ViewModels
             int idxState    = GetCol("state");
             int idxZip      = GetCol("zip code","zip","postal");
             int idxCell     = GetCol("cell number","cell","phone","telephone","mobile");
+            int idxEmail    = GetCol("email","e-mail");
             int idxFax      = GetCol("fax");
             int idxSales    = GetCol("annual sales","sales");
             int idxEmp      = GetCol("number of employee","employees");
@@ -791,9 +955,19 @@ namespace LeadManagement.Desktop.ViewModels
 
                 if (parts.All(string.IsNullOrWhiteSpace)) continue;
 
+                var rawDate = SafeGet(parts, idxDate, -1);
+                var dateVal = !string.IsNullOrWhiteSpace(rawDate) ? rawDate : string.Empty;
+                var rawCalls = SafeGet(parts, idxCalls, -1);
+                int callCount = int.TryParse(rawCalls, out var cc) && cc > 0 ? cc : 1;
+
                 records.Add(new LeadModel
                 {
                     Id               = rowId++,
+                    CallDate         = dateVal,
+                    CallDisposition  = SafeGet(parts, idxDisp, -1),
+                    AssignedAgent    = SafeGet(parts, idxAgent, -1),
+                    Notes            = SafeGet(parts, idxNotes, -1),
+                    CallCount        = callCount,
                     BusinessName     = SafeGet(parts, idxBusiness, 0, "Unnamed Business"),
                     Address          = SafeGet(parts, idxAddress,  1),
                     City             = SafeGet(parts, idxCity,     2),
@@ -801,6 +975,7 @@ namespace LeadManagement.Desktop.ViewModels
                     State            = SafeGet(parts, idxState,    4, "NE"),
                     ZipCode          = SafeGet(parts, idxZip,      5),
                     CellNumber       = SafeGet(parts, idxCell,     6),
+                    Email            = SafeGet(parts, idxEmail,    -1),
                     Fax              = SafeGet(parts, idxFax,      7),
                     AnnualSales      = SafeGet(parts, idxSales,    8, "Less than 500,000"),
                     NumberOfEmployees= SafeGet(parts, idxEmp,      9, "1 to 4"),

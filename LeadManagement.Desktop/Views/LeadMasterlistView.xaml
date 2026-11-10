@@ -224,7 +224,7 @@
                           ClipboardCopyMode="ExcludeHeader"
                           VerticalScrollBarVisibility="Auto"
                           HorizontalScrollBarVisibility="Auto"
-                          Sorting="OnDataGridSorting">
+                          Sorting="OnDataGridSorting" SelectionChanged="DataGrid_SelectionChanged">
                 <DataGrid.Columns>
 
                     <!-- Status Column (Retained & Highlighted) -->

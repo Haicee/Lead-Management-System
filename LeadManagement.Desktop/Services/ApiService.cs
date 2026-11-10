@@ -598,6 +598,38 @@ namespace LeadManagement.Desktop.Services
             catch (Exception ex) { return (false, $"Error fetching file leads: {ex.Message}", null); }
         }
 
+        /// <summary>Retrieves all leads belonging to a specific client via GET /clients/{clientId}/leads.</summary>
+        public async Task<(bool Success, string Message, System.Collections.Generic.List<LeadModel>? Leads)> GetClientLeadsAsync(int clientId)
+        {
+            try
+            {
+                var response = await _httpClient.GetAsync($"clients/{clientId}/leads");
+                var responseBody = await response.Content.ReadAsStringAsync();
+                var result = JsonSerializer.Deserialize<ApiResponse<ClientLeadsData>>(responseBody);
+                if (result == null) return (false, "Unable to parse server response.", null);
+                return (result.Success, result.Message, result.Data?.Leads);
+            }
+            catch (HttpRequestException) { return (false, "Cannot connect to server. Please ensure XAMPP Apache & MySQL are running.", null); }
+            catch (Exception ex) { return (false, $"Error fetching client leads: {ex.Message}", null); }
+        }
+
+        /// <summary>Updates lead fields in real time via POST /leads/{id}.</summary>
+        public async Task<(bool Success, string Message, LeadModel? UpdatedLead)> UpdateLeadAsync(int leadId, object payload)
+        {
+            try
+            {
+                var json = JsonSerializer.Serialize(payload);
+                var content = new StringContent(json, Encoding.UTF8, "application/json");
+                var response = await _httpClient.PostAsync($"leads/{leadId}", content);
+                var responseBody = await response.Content.ReadAsStringAsync();
+                var result = JsonSerializer.Deserialize<ApiResponse<LeadModel>>(responseBody);
+                if (result == null) return (false, "Unable to parse server response.", null);
+                return (result.Success, result.Message, result.Data);
+            }
+            catch (HttpRequestException) { return (false, "Cannot connect to server. Please ensure XAMPP Apache & MySQL are running.", null); }
+            catch (Exception ex) { return (false, $"Error updating lead: {ex.Message}", null); }
+        }
+
         /// <summary>Deletes a client and all associated data via POST /clients/delete.</summary>
         public async Task<(bool Success, string Message)> DeleteClientAsync(int clientId)
         {

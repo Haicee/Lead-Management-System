@@ -138,26 +138,30 @@ class ClientController
         try {
             $this->db->beginTransaction();
 
-            // 1. Create import_batches audit entry
-            $stmtBatch = $this->db->prepare("
-                INSERT INTO `import_batches` 
-                (`batch_name`, `file_name`, `total_leads`, `initial_status`, `imported_by`) 
-                VALUES (?, ?, ?, 'New Lead', NULL)
+            // 1. Create client_files entry
+            $stmtFile = $this->db->prepare("
+                INSERT INTO `client_files` 
+                (`client_id`, `client_name`, `file_name`, `file_size`, `total_leads`, `batch_id`)
+                VALUES (?, ?, ?, ?, ?, NULL)
             ");
-            $stmtBatch->execute([$batchName, $fileName, $totalLeads]);
-            $batchId = (int) $this->db->lastInsertId();
+            $stmtFile->execute([$clientId, $clientName, $fileName, $fileSize, $totalLeads]);
+            $fileId = (int) $this->db->lastInsertId();
 
-            // 2. Insert leads records
+            // 2. Insert into dedicated client_leads table
             $stmtLead = $this->db->prepare("
-                INSERT INTO `leads` (
-                    `batch_id`, `batch_name`, `status`, `business_name`, `address`, 
+                INSERT INTO `client_leads` (
+                    `client_id`, `file_id`, `call_date`, `call_disposition`, 
+                    `assigned_agent_id`, `assigned_agent`, `notes`, `call_count`,
+                    `status`, `business_name`, `address`, 
                     `city`, `county`, `state`, `zip_code`, `cell_number`, 
-                    `fax`, `annual_sales`, `number_of_employees`, `title`, `contact_name`, 
+                    `fax`, `email`, `annual_sales`, `number_of_employees`, `title`, `contact_name`, 
                     `website`, `sic_code`, `sic_description`, `naics_code`, `naics_description`
                 ) VALUES (
+                    ?, ?, ?, ?, 
+                    ?, ?, ?, ?,
+                    ?, ?, ?, 
                     ?, ?, ?, ?, ?, 
-                    ?, ?, ?, ?, ?, 
-                    ?, ?, ?, ?, ?, 
+                    ?, ?, ?, ?, ?, ?, 
                     ?, ?, ?, ?, ?
                 )
             ");
@@ -170,9 +174,23 @@ class ClientController
                     $bName = 'Unnamed Lead #' . ($inserted + 1);
                 }
 
+                $callDate = !empty($lead['call_date']) ? $lead['call_date'] : null;
+                $callDisp = trim($lead['call_disposition'] ?? $lead['call_composition'] ?? '');
+                $agentId = !empty($lead['assigned_agent_id']) ? (int)$lead['assigned_agent_id'] : null;
+                $agent = trim($lead['assigned_agent'] ?? $lead['agent'] ?? '');
+                $notes = trim($lead['notes'] ?? '');
+                $callCount = isset($lead['call_count']) && $lead['call_count'] !== '' ? (int)$lead['call_count'] : 1;
+                $email = trim($lead['email'] ?? '');
+
                 $stmtLead->execute([
-                    $batchId,
-                    $batchName,
+                    $clientId,
+                    $fileId,
+                    $callDate,
+                    $callDisp,
+                    $agentId,
+                    $agent,
+                    $notes,
+                    $callCount,
                     $status,
                     $bName,
                     trim($lead['address'] ?? ''),
@@ -182,6 +200,7 @@ class ClientController
                     trim($lead['zip_code'] ?? ''),
                     trim($lead['cell_number'] ?? ''),
                     trim($lead['fax'] ?? ''),
+                    $email,
                     trim($lead['annual_sales'] ?? 'Less than 500,000'),
                     trim($lead['number_of_employees'] ?? '1 to 4'),
                     trim($lead['title'] ?? ''),
@@ -195,14 +214,9 @@ class ClientController
                 $inserted++;
             }
 
-            // 3. Create client_files entry
-            $stmtFile = $this->db->prepare("
-                INSERT INTO `client_files` 
-                (`client_id`, `client_name`, `file_name`, `file_size`, `total_leads`, `batch_id`)
-                VALUES (?, ?, ?, ?, ?, ?)
-            ");
-            $stmtFile->execute([$clientId, $clientName, $fileName, $fileSize, $inserted, $batchId]);
-            $fileId = (int) $this->db->lastInsertId();
+            // Update total leads count in client_files
+            $updFile = $this->db->prepare("UPDATE `client_files` SET `total_leads` = ? WHERE `id` = ?");
+            $updFile->execute([$inserted, $fileId]);
 
             $this->db->commit();
 
@@ -213,7 +227,7 @@ class ClientController
                 'file_name'   => $fileName,
                 'file_size'   => $fileSize,
                 'total_leads' => $inserted,
-                'batch_id'    => $batchId,
+                'batch_id'    => null,
                 'created_at'  => date('Y-m-d H:i:s'),
             ], "Successfully uploaded {$inserted} leads for client '{$clientName}'.", 201);
 
@@ -294,7 +308,11 @@ class ClientController
         try {
             $this->db->beginTransaction();
 
-            // 1. Find all batch IDs belonging to this client's files
+            // 1. Delete all client_leads belonging to this client
+            $delClientLeads = $this->db->prepare("DELETE FROM `client_leads` WHERE `client_id` = ?");
+            $delClientLeads->execute([$clientId]);
+
+            // 2. Find any legacy batch IDs belonging to this client's files
             $stmtFiles = $this->db->prepare("SELECT id, batch_id FROM `client_files` WHERE `client_id` = ?");
             $stmtFiles->execute([$clientId]);
             $files = $stmtFiles->fetchAll();
@@ -310,7 +328,7 @@ class ClientController
                 }
             }
 
-            // 2. Delete client (cascades client_files and client_agents)
+            // 3. Delete client (cascades client_files and client_agents)
             $stmt = $this->db->prepare("DELETE FROM `clients` WHERE `id` = ?");
             $stmt->execute([$clientId]);
 
@@ -350,18 +368,22 @@ class ClientController
             $batchId = !empty($file['batch_id']) ? (int)$file['batch_id'] : null;
             $deletedLeads = 0;
 
+            // 1. Delete associated leads from dedicated client_leads table
+            $delClientLeads = $this->db->prepare("DELETE FROM `client_leads` WHERE `file_id` = ?");
+            $delClientLeads->execute([$fileId]);
+            $deletedLeads += $delClientLeads->rowCount();
+
+            // 2. Delete legacy leads if any exist
             if ($batchId) {
-                // Delete associated leads
                 $delLeads = $this->db->prepare("DELETE FROM `leads` WHERE `batch_id` = ?");
                 $delLeads->execute([$batchId]);
-                $deletedLeads = $delLeads->rowCount();
+                $deletedLeads += $delLeads->rowCount();
 
-                // Delete associated import batch
                 $delBatch = $this->db->prepare("DELETE FROM `import_batches` WHERE `id` = ?");
                 $delBatch->execute([$batchId]);
             }
 
-            // Delete from client_files
+            // 3. Delete from client_files
             $delFile = $this->db->prepare("DELETE FROM `client_files` WHERE `id` = ?");
             $delFile->execute([$fileId]);
 
@@ -402,17 +424,25 @@ class ClientController
             Response::notFound('Client file not found.');
         }
 
-        $batchId = !empty($file['batch_id']) ? (int)$file['batch_id'] : null;
-        $leads = [];
+        // First check dedicated client_leads table
+        $stmtLeads = $this->db->prepare("
+            SELECT * FROM `client_leads` 
+            WHERE `file_id` = ? 
+            ORDER BY `id` ASC
+        ");
+        $stmtLeads->execute([$fileId]);
+        $leads = $stmtLeads->fetchAll();
 
-        if ($batchId) {
-            $stmtLeads = $this->db->prepare("
+        // Fallback to legacy leads table if client_leads was empty and batch_id exists
+        $batchId = !empty($file['batch_id']) ? (int)$file['batch_id'] : null;
+        if (empty($leads) && $batchId) {
+            $stmtLegacy = $this->db->prepare("
                 SELECT * FROM `leads` 
                 WHERE `batch_id` = ? 
                 ORDER BY `id` ASC
             ");
-            $stmtLeads->execute([$batchId]);
-            $leads = $stmtLeads->fetchAll();
+            $stmtLegacy->execute([$batchId]);
+            $leads = $stmtLegacy->fetchAll();
         }
 
         Response::success([
@@ -459,6 +489,135 @@ class ClientController
             'id'        => $fileId,
             'file_name' => $fileName
         ], 'File updated successfully.');
+    }
+
+    /**
+     * GET /clients/{id}/leads
+     * 
+     * Retrieves all lead records for a specific client across all their files.
+     */
+    public function clientLeads(int $clientId): void
+    {
+        if ($clientId <= 0) {
+            Response::error('Invalid client ID.', 422);
+        }
+
+        $stmtClient = $this->db->prepare("SELECT id, first_name, last_name FROM `clients` WHERE id = ?");
+        $stmtClient->execute([$clientId]);
+        $client = $stmtClient->fetch();
+
+        if (!$client) {
+            Response::notFound('Client not found.');
+        }
+
+        // Query dedicated client_leads table
+        $stmtLeads = $this->db->prepare("
+            SELECT * FROM `client_leads` 
+            WHERE `client_id` = ? 
+            ORDER BY `id` ASC
+        ");
+        $stmtLeads->execute([$clientId]);
+        $leads = $stmtLeads->fetchAll();
+
+        // Fallback to legacy leads if empty
+        if (empty($leads)) {
+            $stmtLegacy = $this->db->prepare("
+                SELECT * FROM `leads` 
+                WHERE `client_id` = ? 
+                ORDER BY `id` ASC
+            ");
+            $stmtLegacy->execute([$clientId]);
+            $leads = $stmtLegacy->fetchAll();
+        }
+
+        Response::success([
+            'client_id'   => $clientId,
+            'client_name' => trim($client['first_name'] . ' ' . $client['last_name']),
+            'total'       => count($leads),
+            'leads'       => $leads
+        ], 'Client leads retrieved successfully');
+    }
+
+    /**
+     * POST /clients/leads/{id} or POST /clients/leads/update
+     * 
+     * Updates an individual lead in client_leads.
+     */
+    public function updateLead(int $leadId, array $input): void
+    {
+        if ($leadId <= 0) {
+            $leadId = (int)($input['id'] ?? 0);
+        }
+        if ($leadId <= 0) {
+            Response::error('Invalid lead ID.', 422);
+        }
+
+        $stmt = $this->db->prepare("SELECT id FROM `client_leads` WHERE id = ?");
+        $stmt->execute([$leadId]);
+        if (!$stmt->fetch()) {
+            // Check legacy leads table
+            $stmtLegacy = $this->db->prepare("SELECT id FROM `leads` WHERE id = ?");
+            $stmtLegacy->execute([$leadId]);
+            if (!$stmtLegacy->fetch()) {
+                Response::notFound('Lead not found.');
+            }
+            $table = 'leads';
+        } else {
+            $table = 'client_leads';
+        }
+
+        $allowedFields = [
+            'call_date',
+            'call_disposition',
+            'assigned_agent_id',
+            'assigned_agent',
+            'notes',
+            'call_count',
+            'email',
+            'status',
+            'business_name',
+            'address',
+            'city',
+            'county',
+            'state',
+            'zip_code',
+            'cell_number',
+            'fax',
+            'annual_sales',
+            'number_of_employees',
+            'title',
+            'contact_name',
+            'website',
+            'sic_code',
+            'sic_description',
+            'naics_code',
+            'naics_description'
+        ];
+
+        $fieldsToUpdate = [];
+        $params = [];
+
+        foreach ($allowedFields as $field) {
+            if (array_key_exists($field, $input)) {
+                $fieldsToUpdate[] = "`{$field}` = ?";
+                $params[] = $input[$field];
+            }
+        }
+
+        if (empty($fieldsToUpdate)) {
+            Response::error('No valid fields provided for update.', 422);
+        }
+
+        $params[] = $leadId;
+        $sql = "UPDATE `{$table}` SET " . implode(', ', $fieldsToUpdate) . " WHERE id = ?";
+        $updateStmt = $this->db->prepare($sql);
+        $updateStmt->execute($params);
+
+        $fetchStmt = $this->db->prepare("SELECT * FROM `{$table}` WHERE id = ?");
+        $fetchStmt->execute([$leadId]);
+        $updatedLead = $fetchStmt->fetch();
+
+        Response::success($updatedLead, 'Client lead updated successfully');
     }
 }
 

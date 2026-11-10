@@ -156,5 +156,92 @@ namespace LeadManagement.Desktop.Models
             get => _agentSelectionItems;
             set => SetProperty(ref _agentSelectionItems, value);
         }
+
+        // --- Client Leads Table & Real-Time Sync State ---
+
+        private ObservableCollection<LeadModel> _leads = new();
+        private ObservableCollection<LeadModel> _filteredLeads = new();
+        private string _leadSearchText = string.Empty;
+        private bool _isLoadingLeads;
+        private ObservableCollection<string> _assignedAgentNames = new();
+
+        [JsonIgnore]
+        public ObservableCollection<LeadModel> Leads
+        {
+            get => _leads;
+            set
+            {
+                if (SetProperty(ref _leads, value))
+                {
+                    FilterLeads();
+                    OnPropertyChanged(nameof(HasLeads));
+                }
+            }
+        }
+
+        [JsonIgnore]
+        public ObservableCollection<LeadModel> FilteredLeads
+        {
+            get => _filteredLeads;
+            set => SetProperty(ref _filteredLeads, value);
+        }
+
+        [JsonIgnore]
+        public string LeadSearchText
+        {
+            get => _leadSearchText;
+            set
+            {
+                if (SetProperty(ref _leadSearchText, value))
+                {
+                    FilterLeads();
+                }
+            }
+        }
+
+        [JsonIgnore]
+        public bool IsLoadingLeads
+        {
+            get => _isLoadingLeads;
+            set => SetProperty(ref _isLoadingLeads, value);
+        }
+
+        [JsonIgnore]
+        public bool HasLeads => (Leads != null && Leads.Count > 0) || TotalLeads > 0;
+
+        [JsonIgnore]
+        public ObservableCollection<string> AssignedAgentNames
+        {
+            get => _assignedAgentNames;
+            set => SetProperty(ref _assignedAgentNames, value);
+        }
+
+        public void FilterLeads()
+        {
+            if (Leads == null || Leads.Count == 0)
+            {
+                FilteredLeads = new ObservableCollection<LeadModel>();
+                return;
+            }
+
+            var q = LeadSearchText?.Trim() ?? string.Empty;
+            if (string.IsNullOrEmpty(q))
+            {
+                FilteredLeads = new ObservableCollection<LeadModel>(Leads);
+            }
+            else
+            {
+                var filtered = System.Linq.Enumerable.Where(Leads, l =>
+                    (l.BusinessName?.Contains(q, StringComparison.OrdinalIgnoreCase) == true) ||
+                    (l.ContactName?.Contains(q, StringComparison.OrdinalIgnoreCase) == true) ||
+                    (l.City?.Contains(q, StringComparison.OrdinalIgnoreCase) == true) ||
+                    (l.State?.Contains(q, StringComparison.OrdinalIgnoreCase) == true) ||
+                    (l.CellNumber?.Contains(q, StringComparison.OrdinalIgnoreCase) == true) ||
+                    (l.CallDisposition?.Contains(q, StringComparison.OrdinalIgnoreCase) == true) ||
+                    (l.AssignedAgent?.Contains(q, StringComparison.OrdinalIgnoreCase) == true) ||
+                    (l.Notes?.Contains(q, StringComparison.OrdinalIgnoreCase) == true));
+                FilteredLeads = new ObservableCollection<LeadModel>(filtered);
+            }
+        }
     }
 }

@@ -546,4 +546,86 @@ class LeadController
             Response::serverError('Failed to delete batch: ' . $e->getMessage());
         }
     }
+
+    /**
+     * POST /leads/update or POST /leads/{id} or PUT /leads/{id}
+     * 
+     * Updates an individual lead's fields (real-time sync).
+     */
+    public function update(int $leadId, array $input): void
+    {
+        if ($leadId <= 0) {
+            $leadId = (int)($input['id'] ?? 0);
+        }
+        if ($leadId <= 0) {
+            Response::error('Invalid lead ID.', 422);
+        }
+
+        $table = 'leads';
+        $stmt = $this->db->prepare("SELECT id FROM `leads` WHERE id = ?");
+        $stmt->execute([$leadId]);
+        if (!$stmt->fetch()) {
+            // Check client_leads table
+            $stmtCl = $this->db->prepare("SELECT id FROM `client_leads` WHERE id = ?");
+            $stmtCl->execute([$leadId]);
+            if ($stmtCl->fetch()) {
+                $table = 'client_leads';
+            } else {
+                Response::notFound('Lead not found.');
+            }
+        }
+
+        $allowedFields = [
+            'call_date',
+            'call_disposition',
+            'assigned_agent_id',
+            'assigned_agent',
+            'notes',
+            'call_count',
+            'email',
+            'status',
+            'business_name',
+            'address',
+            'city',
+            'county',
+            'state',
+            'zip_code',
+            'cell_number',
+            'fax',
+            'annual_sales',
+            'number_of_employees',
+            'title',
+            'contact_name',
+            'website',
+            'sic_code',
+            'sic_description',
+            'naics_code',
+            'naics_description'
+        ];
+
+        $fieldsToUpdate = [];
+        $params = [];
+
+        foreach ($allowedFields as $field) {
+            if (array_key_exists($field, $input)) {
+                $fieldsToUpdate[] = "`{$field}` = ?";
+                $params[] = $input[$field];
+            }
+        }
+
+        if (empty($fieldsToUpdate)) {
+            Response::error('No valid fields provided for update.', 422);
+        }
+
+        $params[] = $leadId;
+        $sql = "UPDATE `{$table}` SET " . implode(', ', $fieldsToUpdate) . " WHERE id = ?";
+        $updateStmt = $this->db->prepare($sql);
+        $updateStmt->execute($params);
+
+        $fetchStmt = $this->db->prepare("SELECT * FROM `{$table}` WHERE id = ?");
+        $fetchStmt->execute([$leadId]);
+        $updatedLead = $fetchStmt->fetch();
+
+        Response::success($updatedLead, 'Lead updated successfully');
+    }
 }
