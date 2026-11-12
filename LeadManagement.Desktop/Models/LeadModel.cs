@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Text.Json.Serialization;
 using LeadManagement.Desktop.ViewModels;
 
@@ -91,21 +92,55 @@ namespace LeadManagement.Desktop.Models
             }
         }
 
+        private static readonly string[] CallDateFormats = new[]
+        {
+            "MM/dd/yy", "M/d/yy",
+            "MM/dd/yyyy", "M/d/yyyy",
+            "yyyy-MM-dd", "yyyy-MM-dd HH:mm:ss",
+            "yyyy/MM/dd", "yyyy/MM/dd HH:mm:ss",
+            "MM-dd-yyyy", "MM-dd-yy",
+            "d MMM yyyy", "dd MMM yyyy", "MMM d, yyyy", "MMM dd, yyyy",
+            "d MMMM yyyy", "dd MMMM yyyy", "MMMM d, yyyy", "MMMM dd, yyyy",
+            "dd/MM/yyyy", "d/M/yyyy", "dd/MM/yy", "d/M/yy"
+        };
+
+        public static DateTime? ParseCallDate(string? dateStr)
+        {
+            if (string.IsNullOrWhiteSpace(dateStr)) return null;
+
+            var trimmed = dateStr.Trim();
+            if (DateTime.TryParseExact(trimmed, CallDateFormats, CultureInfo.InvariantCulture, DateTimeStyles.None, out var dtExact))
+            {
+                return dtExact;
+            }
+
+            if (DateTime.TryParse(trimmed, CultureInfo.InvariantCulture, DateTimeStyles.None, out var dtInv))
+            {
+                return dtInv;
+            }
+
+            if (DateTime.TryParse(trimmed, CultureInfo.CurrentCulture, DateTimeStyles.None, out var dtCurr))
+            {
+                return dtCurr;
+            }
+
+            return null;
+        }
+
         /// <summary>
         /// Two-way bindable DateTime? for DatePicker UI with calendar popup.
+        /// Parses and formats dates culture-insensitively using InvariantCulture to avoid
+        /// the day/month swap and jumping date bug across different system locales.
         /// </summary>
         [JsonIgnore]
         public DateTime? SelectedDate
         {
-            get
-            {
-                if (string.IsNullOrWhiteSpace(CallDate)) return null;
-                if (DateTime.TryParse(CallDate, out var dt)) return dt;
-                return null;
-            }
+            get => ParseCallDate(CallDate);
             set
             {
-                var newDateStr = value?.ToString("MM/dd/yy") ?? string.Empty;
+                if (SelectedDate == value) return;
+
+                var newDateStr = value?.ToString("MM/dd/yy", CultureInfo.InvariantCulture) ??  string.Empty;
                 if (CallDate != newDateStr)
                 {
                     CallDate = newDateStr;
@@ -194,7 +229,13 @@ namespace LeadManagement.Desktop.Models
         public string BusinessName
         {
             get => _businessName;
-            set => SetProperty(ref _businessName, value);
+            set
+            {
+                if (SetProperty(ref _businessName, value ?? string.Empty))
+                {
+                    NotifyChange("business_name");
+                }
+            }
         }
 
         [JsonPropertyName("address")]
@@ -238,9 +279,10 @@ namespace LeadManagement.Desktop.Models
             get => _cellNumber;
             set
             {
-                if (SetProperty(ref _cellNumber, value))
+                if (SetProperty(ref _cellNumber, value ?? string.Empty))
                 {
                     OnPropertyChanged(nameof(FormattedPhone));
+                    NotifyChange("cell_number");
                 }
             }
         }
@@ -290,7 +332,13 @@ namespace LeadManagement.Desktop.Models
         public string ContactName
         {
             get => _contactName;
-            set => SetProperty(ref _contactName, value);
+            set
+            {
+                if (SetProperty(ref _contactName, value ?? string.Empty))
+                {
+                    NotifyChange("contact_name");
+                }
+            }
         }
 
         [JsonPropertyName("website")]

@@ -4,11 +4,146 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:viewmodels="clr-namespace:LeadManagement.Desktop.ViewModels"
+             xmlns:models="clr-namespace:LeadManagement.Desktop.Models"
              mc:Ignorable="d" 
              d:DataContext="{d:DesignInstance Type=viewmodels:MainViewModel, IsDesignTimeCreatable=True}"
              d:DesignHeight="850" d:DesignWidth="1240"
              FontFamily="{StaticResource AppFontFamily}"
              Background="{StaticResource WindowBgBrush}">
+
+    <UserControl.Resources>
+        <!-- Ghost export button (Blue theme) -->
+        <Style x:Key="ExportButtonStyle" TargetType="Button">
+            <Setter Property="FontFamily"   Value="{StaticResource AppFontFamily}"/>
+            <Setter Property="FontSize"     Value="12"/>
+            <Setter Property="FontWeight"   Value="SemiBold"/>
+            <Setter Property="Foreground"   Value="#2563EB"/>
+            <Setter Property="Background"   Value="#EFF6FF"/>
+            <Setter Property="BorderBrush"  Value="#BFDBFE"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding"      Value="10,5"/>
+            <Setter Property="Cursor"       Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="bd"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="6"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="bd" Property="Background" Value="#DBEAFE"/>
+                                <Setter TargetName="bd" Property="BorderBrush" Value="#93C5FD"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="bd" Property="Background" Value="#BFDBFE"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Zoom Call icon button style (Green dial button) -->
+        <Style x:Key="CallIconButtonStyle" TargetType="Button">
+            <Setter Property="Height" Value="28"/>
+            <Setter Property="Width" Value="28"/>
+            <Setter Property="Background" Value="#10B981"/>
+            <Setter Property="BorderBrush" Value="#059669"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="ToolTip" Value="Call via Zoom Phone"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="bd"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="5">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="bd" Property="Background" Value="#059669"/>
+                                <Setter TargetName="bd" Property="BorderBrush" Value="#047857"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="bd" Property="Background" Value="#047857"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Danger / Cancel button (red ghost) -->
+        <Style x:Key="DangerButtonStyle" TargetType="Button">
+            <Setter Property="FontFamily"      Value="{StaticResource AppFontFamily}"/>
+            <Setter Property="FontSize"        Value="12"/>
+            <Setter Property="FontWeight"      Value="SemiBold"/>
+            <Setter Property="Foreground"      Value="#DC2626"/>
+            <Setter Property="Background"      Value="#FEF2F2"/>
+            <Setter Property="BorderBrush"     Value="#FECACA"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding"         Value="10,5"/>
+            <Setter Property="Cursor"          Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="bd"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="6"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="bd" Property="Background"  Value="#FEE2E2"/>
+                                <Setter TargetName="bd" Property="BorderBrush" Value="#FCA5A5"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="bd" Property="Background" Value="#FECACA"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Centered DataGrid cell style – eliminates cell underline and borders -->
+        <Style x:Key="CenteredCellStyle" TargetType="DataGridCell">
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="BorderBrush" Value="{x:Null}"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="DataGridCell">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderThickness="0"
+                                Padding="6,0"
+                                SnapsToDevicePixels="True">
+                            <ContentPresenter VerticalAlignment="Center" SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter Property="Background" Value="#EFF6FF"/>
+                                <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
 
     <Grid>
         <Grid.RowDefinitions>
@@ -83,7 +218,7 @@
                 <ColumnDefinition Width="*" />    <!-- Content Region -->
             </Grid.ColumnDefinitions>
 
-            <!-- LEFT NAVIGATION SIDEBAR -->
+            <!-- LEFT NAVIGATION SIDEBAR (Only 'My Assigned Leads') -->
             <Border Grid.Column="0" 
                     Width="{Binding UserDashboard.SidebarWidth}"
                     Background="{StaticResource SidebarBgBrush}" 
@@ -115,116 +250,14 @@
                         </TextBlock.Style>
                     </TextBlock>
 
-                    <!-- Nav Buttons -->
+                    <!-- Nav Buttons (Only 'My Assigned Leads') -->
                     <StackPanel Grid.Row="1">
-                        <!-- 1. My Dashboard -->
-                        <Button Command="{Binding UserDashboard.NavigateUserCommand}" 
-                                CommandParameter="UserDashboard"
-                                ToolTip="Agent Dashboard">
-                            <Button.Style>
-                                <Style TargetType="Button" BasedOn="{StaticResource SidebarNavButtonStyle}">
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding UserDashboard.CurrentUserView}" Value="UserDashboard">
-                                            <Setter Property="Tag" Value="Active" />
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </Button.Style>
+                        <Button ToolTip="My Assigned Leads"
+                                Style="{StaticResource SidebarNavButtonStyle}"
+                                Tag="Active">
                             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                <TextBlock Text="📊" FontSize="15" Width="26" TextAlignment="Center" VerticalAlignment="Center" />
-                                <TextBlock Text="My Dashboard" Margin="10,0,0,0" VerticalAlignment="Center">
-                                    <TextBlock.Style>
-                                        <Style TargetType="TextBlock">
-                                            <Setter Property="Visibility" Value="Visible" />
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding UserDashboard.IsSidebarCollapsed}" Value="True">
-                                                    <Setter Property="Visibility" Value="Collapsed" />
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </TextBlock.Style>
-                                </TextBlock>
-                            </StackPanel>
-                        </Button>
-
-                        <!-- 2. My Assigned Leads -->
-                        <Button Command="{Binding UserDashboard.NavigateUserCommand}" 
-                                CommandParameter="MyLeads"
-                                ToolTip="My Assigned Leads">
-                            <Button.Style>
-                                <Style TargetType="Button" BasedOn="{StaticResource SidebarNavButtonStyle}">
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding UserDashboard.CurrentUserView}" Value="MyLeads">
-                                            <Setter Property="Tag" Value="Active" />
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </Button.Style>
-                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                <TextBlock Text="📞" FontSize="15" Width="26" TextAlignment="Center" VerticalAlignment="Center" />
+                                <TextBlock Text="📁" FontSize="15" Width="26" TextAlignment="Center" VerticalAlignment="Center" />
                                 <TextBlock Text="My Assigned Leads" Margin="10,0,0,0" VerticalAlignment="Center">
-                                    <TextBlock.Style>
-                                        <Style TargetType="TextBlock">
-                                            <Setter Property="Visibility" Value="Visible" />
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding UserDashboard.IsSidebarCollapsed}" Value="True">
-                                                    <Setter Property="Visibility" Value="Collapsed" />
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </TextBlock.Style>
-                                </TextBlock>
-                            </StackPanel>
-                        </Button>
-
-                        <!-- 3. Follow-up Tasks -->
-                        <Button Command="{Binding UserDashboard.NavigateUserCommand}" 
-                                CommandParameter="Tasks"
-                                ToolTip="Follow-up Call Tasks">
-                            <Button.Style>
-                                <Style TargetType="Button" BasedOn="{StaticResource SidebarNavButtonStyle}">
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding UserDashboard.CurrentUserView}" Value="Tasks">
-                                            <Setter Property="Tag" Value="Active" />
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </Button.Style>
-                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                <TextBlock Text="📝" FontSize="15" Width="26" TextAlignment="Center" VerticalAlignment="Center" />
-                                <TextBlock Text="Follow-up Queue" Margin="10,0,0,0" VerticalAlignment="Center">
-                                    <TextBlock.Style>
-                                        <Style TargetType="TextBlock">
-                                            <Setter Property="Visibility" Value="Visible" />
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding UserDashboard.IsSidebarCollapsed}" Value="True">
-                                                    <Setter Property="Visibility" Value="Collapsed" />
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </TextBlock.Style>
-                                </TextBlock>
-                            </StackPanel>
-                        </Button>
-
-                        <Rectangle Height="1" Fill="#1E293B" Margin="14,14" />
-
-                        <!-- 4. Profile / Settings -->
-                        <Button Command="{Binding UserDashboard.NavigateUserCommand}" 
-                                CommandParameter="Profile"
-                                ToolTip="Agent Profile">
-                            <Button.Style>
-                                <Style TargetType="Button" BasedOn="{StaticResource SidebarNavButtonStyle}">
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding UserDashboard.CurrentUserView}" Value="Profile">
-                                            <Setter Property="Tag" Value="Active" />
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </Button.Style>
-                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                <TextBlock Text="⚙️" FontSize="15" Width="26" TextAlignment="Center" VerticalAlignment="Center" />
-                                <TextBlock Text="My Profile" Margin="10,0,0,0" VerticalAlignment="Center">
                                     <TextBlock.Style>
                                         <Style TargetType="TextBlock">
                                             <Setter Property="Visibility" Value="Visible" />
@@ -253,262 +286,637 @@
                                     </Style.Triggers>
                                 </Style>
                             </StackPanel.Style>
-                            <TextBlock Text="Virtual Assistant Services" FontSize="11" FontWeight="SemiBold" Foreground="#94A3B8" />
-                            <TextBlock Text="Agent Workspace • 2026" FontSize="10" Foreground="#475569" Margin="0,2,0,0" />
+                            <TextBlock Text="Virtual Assistant Services" FontSize="11" Foreground="#475569" FontWeight="SemiBold" />
+                            <TextBlock Text="Agent Portal · 2026" FontSize="10" Foreground="#334155" Margin="0,2,0,0" />
                         </StackPanel>
                     </Border>
                 </Grid>
             </Border>
 
-            <!-- MAIN CONTENT AREA -->
-            <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-                <StackPanel Margin="32,28,32,32">
+            <!-- MAIN CONTENT AREA: ASSIGNED CLIENTS (FOLDERING ACCORDION) -->
+            <Grid Grid.Column="1" Background="#F8FAFC">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel Margin="32,28,32,32">
 
-                    <!-- Welcome Hero Header -->
-                    <Border Style="{StaticResource CardBorderStyle}" Padding="26,22" Margin="0,0,0,24" Background="#FFFFFF">
-                        <Grid>
+                        <!-- Page Header -->
+                        <Grid Margin="0,0,0,24">
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
 
                             <StackPanel Grid.Column="0">
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                    <TextBlock Text="Welcome back, " FontSize="22" FontWeight="Bold" Foreground="{StaticResource TextPrimaryBrush}" />
-                                    <TextBlock Text="{Binding ActiveUser}" FontSize="22" FontWeight="Bold" Foreground="{StaticResource PrimaryBrush}" />
-                                    <TextBlock Text=" 👋" FontSize="22" />
+                                    <TextBlock Text="My Assigned Clients" FontSize="26" FontWeight="Bold" Foreground="{StaticResource TextPrimaryBrush}"/>
+                                    <Border Background="#EFF6FF" CornerRadius="10" Padding="10,3" Margin="12,0,0,0" VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding UserDashboard.AssignedClients.Count, StringFormat={}{0} clients}"
+                                                   FontSize="12" FontWeight="SemiBold" Foreground="#2563EB"/>
+                                    </Border>
                                 </StackPanel>
-                                <TextBlock Text="Here is your active outreach pipeline and assigned inquiries queue for today." 
-                                           FontSize="13" 
-                                           Foreground="{StaticResource TextSecondaryBrush}" 
-                                           Margin="0,4,0,0" />
+                                <TextBlock Text="View lead files, preview client data, and dial leads assigned to you by administrators."
+                                           FontSize="13" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,4,0,0"/>
                             </StackPanel>
 
-                            <Border Grid.Column="1" Background="#F1F5F9" CornerRadius="8" Padding="14,8" VerticalAlignment="Center">
-                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                    <TextBlock Text="📅 Status: " FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" />
-                                    <TextBlock Text="Ready for Outreach" FontSize="12" FontWeight="Bold" Foreground="#059669" />
-                                </StackPanel>
-                            </Border>
+                            <!-- Refresh Button -->
+                            <Button Grid.Column="1"
+                                    Command="{Binding UserDashboard.RefreshCommand}"
+                                    Style="{StaticResource SecondaryButtonStyle}"
+                                    Padding="14,8" VerticalAlignment="Center">
+                                <TextBlock Text="🔄 Refresh"/>
+                            </Button>
                         </Grid>
-                    </Border>
 
-                    <!-- 4 Summary KPI Cards for Agent -->
-                    <Grid Margin="0,0,0,28">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="16" />
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="16" />
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="16" />
-                            <ColumnDefinition Width="*" />
-                        </Grid.ColumnDefinitions>
+                        <!-- Notification Banner -->
+                        <Border BorderThickness="1" CornerRadius="8" Padding="14,10" Margin="0,0,0,16"
+                                Visibility="{Binding UserDashboard.IsBannerVisible, Converter={StaticResource BooleanToVisibilityConverter}}">
+                            <Border.Style>
+                                <Style TargetType="Border">
+                                    <!-- Default: success (green) -->
+                                    <Setter Property="Background"  Value="#ECFDF5"/>
+                                    <Setter Property="BorderBrush" Value="#A7F3D0"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding UserDashboard.IsBannerError}" Value="True">
+                                            <Setter Property="Background"  Value="#FEF2F2"/>
+                                            <Setter Property="BorderBrush" Value="#FECACA"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="{Binding UserDashboard.StatusBannerMessage}"
+                                           FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center"
+                                           TextWrapping="Wrap" Margin="0,0,32,0">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Foreground" Value="#065F46"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding UserDashboard.IsBannerError}" Value="True">
+                                                    <Setter Property="Foreground" Value="#DC2626"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                                <Button Grid.Column="1" Command="{Binding UserDashboard.DismissBannerCommand}"
+                                        Background="Transparent" BorderThickness="0" Cursor="Hand"
+                                        Content="✕" FontSize="12" Foreground="#94A3B8" Padding="4,2"
+                                        HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                            </Grid>
+                        </Border>
 
-                        <!-- Card 1: Assigned Leads -->
-                        <Border Grid.Column="0" Style="{StaticResource CardBorderStyle}" Padding="20">
-                            <StackPanel>
-                                <Grid Margin="0,0,0,10">
-                                    <TextBlock Text="ASSIGNED LEADS" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource TextSecondaryBrush}" />
-                                    <Border Background="#EFF6FF" CornerRadius="4" Padding="6,2" HorizontalAlignment="Right">
-                                        <TextBlock Text="📋 Total" FontSize="10.5" FontWeight="SemiBold" Foreground="{StaticResource PrimaryBrush}" />
-                                    </Border>
-                                </Grid>
-                                <TextBlock Text="{Binding UserDashboard.AssignedLeadsCount}" FontSize="28" FontWeight="Bold" Foreground="{StaticResource TextPrimaryBrush}" />
-                                <TextBlock Text="Leads assigned in queue" FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,6,0,0" />
+                        <!-- Empty State (When no clients are assigned) -->
+                        <Border Background="White" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
+                                CornerRadius="12" Padding="48,40" Margin="0,8,0,0"
+                                Visibility="{Binding UserDashboard.HasNoAssignedClients, Converter={StaticResource BooleanToVisibilityConverter}}">
+                            <StackPanel HorizontalAlignment="Center">
+                                <TextBlock Text="📁" FontSize="44" HorizontalAlignment="Center" Margin="0,0,0,12"/>
+                                <TextBlock Text="No Clients Assigned Yet" FontSize="17" FontWeight="Bold"
+                                           Foreground="{StaticResource TextPrimaryBrush}" HorizontalAlignment="Center"/>
+                                <TextBlock Text="You currently do not have any clients assigned to your account.&#x0a;When an administrator assigns clients and leads to you, they will appear here automatically."
+                                           FontSize="13" Foreground="{StaticResource TextSecondaryBrush}" HorizontalAlignment="Center"
+                                           TextAlignment="Center" Margin="0,8,0,20"/>
+                                <Button Content="🔄 Check for New Assignments"
+                                        Command="{Binding UserDashboard.RefreshCommand}"
+                                        Style="{StaticResource SecondaryButtonStyle}"
+                                        Padding="16,8" HorizontalAlignment="Center"/>
                             </StackPanel>
                         </Border>
 
-                        <!-- Card 2: Calls To Make -->
-                        <Border Grid.Column="2" Style="{StaticResource CardBorderStyle}" Padding="20">
-                            <StackPanel>
-                                <Grid Margin="0,0,0,10">
-                                    <TextBlock Text="CALLS TO MAKE" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource TextSecondaryBrush}" />
-                                    <Border Background="#FEF3C7" CornerRadius="4" Padding="6,2" HorizontalAlignment="Right">
-                                        <TextBlock Text="⚡ Pending" FontSize="10.5" FontWeight="SemiBold" Foreground="#D97706" />
-                                    </Border>
-                                </Grid>
-                                <TextBlock Text="{Binding UserDashboard.PendingCallsCount}" FontSize="28" FontWeight="Bold" Foreground="{StaticResource TextPrimaryBrush}" />
-                                <TextBlock Text="Pending direct outreach" FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,6,0,0" />
-                            </StackPanel>
-                        </Border>
+                        <!-- ASSIGNED CLIENTS LIST (Foldering Accordion) -->
+                        <ItemsControl ItemsSource="{Binding UserDashboard.AssignedClients}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Background="White" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
+                                            CornerRadius="10" Margin="0,0,0,12" SnapsToDevicePixels="True">
+                                        <Border.Effect>
+                                            <DropShadowEffect Color="#0F172A" BlurRadius="8" ShadowDepth="1" Direction="270" Opacity="0.04"/>
+                                        </Border.Effect>
 
-                        <!-- Card 3: Qualified Today -->
-                        <Border Grid.Column="4" Style="{StaticResource CardBorderStyle}" Padding="20">
-                            <StackPanel>
-                                <Grid Margin="0,0,0,10">
-                                    <TextBlock Text="QUALIFIED TODAY" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource TextSecondaryBrush}" />
-                                    <Border Background="#ECFDF5" CornerRadius="4" Padding="6,2" HorizontalAlignment="Right">
-                                        <TextBlock Text="🎯 Converted" FontSize="10.5" FontWeight="SemiBold" Foreground="{StaticResource SuccessBrush}" />
-                                    </Border>
-                                </Grid>
-                                <TextBlock Text="{Binding UserDashboard.QualifiedLeadsCount}" FontSize="28" FontWeight="Bold" Foreground="{StaticResource TextPrimaryBrush}" />
-                                <TextBlock Text="Interest confirmed" FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,6,0,0" />
-                            </StackPanel>
-                        </Border>
+                                        <StackPanel>
+                                            <!-- Client Folder Header (Clickable anywhere to expand/collapse) -->
+                                            <Border Background="Transparent" Padding="18,14" Cursor="Hand">
+                                                <Border.InputBindings>
+                                                    <MouseBinding MouseAction="LeftClick"
+                                                                  Command="{Binding DataContext.UserDashboard.ToggleExpandCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                                  CommandParameter="{Binding}"/>
+                                                </Border.InputBindings>
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="Auto"/> <!-- Expand arrow -->
+                                                        <ColumnDefinition Width="Auto"/> <!-- Folder icon -->
+                                                        <ColumnDefinition Width="*"/>    <!-- Client Name & Badges -->
+                                                    </Grid.ColumnDefinitions>
 
-                        <!-- Card 4: Scheduled Follow-ups -->
-                        <Border Grid.Column="6" Style="{StaticResource CardBorderStyle}" Padding="20">
-                            <StackPanel>
-                                <Grid Margin="0,0,0,10">
-                                    <TextBlock Text="FOLLOW-UPS" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource TextSecondaryBrush}" />
-                                    <Border Background="#F5F3FF" CornerRadius="4" Padding="6,2" HorizontalAlignment="Right">
-                                        <TextBlock Text="⏰ Scheduled" FontSize="10.5" FontWeight="SemiBold" Foreground="#7C3AED" />
-                                    </Border>
-                                </Grid>
-                                <TextBlock Text="{Binding UserDashboard.FollowUpsCount}" FontSize="28" FontWeight="Bold" Foreground="{StaticResource TextPrimaryBrush}" />
-                                <TextBlock Text="Callbacks scheduled" FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,6,0,0" />
-                            </StackPanel>
-                        </Border>
-                    </Grid>
-
-                    <!-- Bottom Workspace: Calling Queue + Guidelines -->
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="2.2*" />
-                            <ColumnDefinition Width="20" />
-                            <ColumnDefinition Width="1*" />
-                        </Grid.ColumnDefinitions>
-
-                        <!-- Left: Calling Queue Table Preview -->
-                        <Border Grid.Column="0" Style="{StaticResource CardBorderStyle}" Padding="22">
-                            <StackPanel>
-                                <Grid Margin="0,0,0,16">
-                                    <TextBlock Text="📞 Assigned Leads Calling Queue" FontSize="16" FontWeight="Bold" Foreground="{StaticResource TextPrimaryBrush}" />
-                                    <TextBlock Text="Active Queue" FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" HorizontalAlignment="Right" VerticalAlignment="Center" />
-                                </Grid>
-
-                                <DataGrid ItemsSource="{Binding UserDashboard.MockAssignedLeads}" 
-                                          Style="{StaticResource ModernDataGridStyle}"
-                                          GridLinesVisibility="None"
-                                          MinHeight="220"
-                                          AutoGenerateColumns="False">
-                                    <DataGrid.Columns>
-                                        <!-- Status -->
-                                        <DataGridTemplateColumn Header="STATUS" Width="110">
-                                            <DataGridTemplateColumn.CellTemplate>
-                                                <DataTemplate>
-                                                    <Border CornerRadius="10" Padding="8,3" BorderThickness="1" HorizontalAlignment="Left" VerticalAlignment="Center">
-                                                        <Border.Style>
-                                                            <Style TargetType="Border">
-                                                                <Setter Property="Background" Value="#EFF6FF" />
-                                                                <Setter Property="BorderBrush" Value="#BFDBFE" />
-                                                                <Style.Triggers>
-                                                                    <DataTrigger Binding="{Binding Status}" Value="Qualified">
-                                                                        <Setter Property="Background" Value="#ECFDF5" />
-                                                                        <Setter Property="BorderBrush" Value="#A7F3D0" />
-                                                                    </DataTrigger>
-                                                                    <DataTrigger Binding="{Binding Status}" Value="Follow-up">
-                                                                        <Setter Property="Background" Value="#FFFBEB" />
-                                                                        <Setter Property="BorderBrush" Value="#FDE68A" />
-                                                                    </DataTrigger>
-                                                                    <DataTrigger Binding="{Binding Status}" Value="Contacted">
-                                                                        <Setter Property="Background" Value="#F5F3FF" />
-                                                                        <Setter Property="BorderBrush" Value="#DDD6FE" />
-                                                                    </DataTrigger>
-                                                                </Style.Triggers>
-                                                            </Style>
-                                                        </Border.Style>
-                                                        <TextBlock Text="{Binding Status}" FontSize="11" FontWeight="SemiBold">
+                                                    <!-- Expand Arrow Button -->
+                                                    <Button Grid.Column="0"
+                                                            Command="{Binding DataContext.UserDashboard.ToggleExpandCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                            CommandParameter="{Binding}"
+                                                            Background="Transparent" BorderThickness="0" Cursor="Hand"
+                                                            VerticalAlignment="Center" Margin="0,0,10,0" Padding="4">
+                                                        <TextBlock FontSize="12" Foreground="#64748B" FontWeight="Bold">
                                                             <TextBlock.Style>
                                                                 <Style TargetType="TextBlock">
-                                                                    <Setter Property="Foreground" Value="#1D4ED8" />
+                                                                    <Setter Property="Text" Value="▶"/>
                                                                     <Style.Triggers>
-                                                                        <DataTrigger Binding="{Binding Status}" Value="Qualified">
-                                                                            <Setter Property="Foreground" Value="#047857" />
-                                                                        </DataTrigger>
-                                                                        <DataTrigger Binding="{Binding Status}" Value="Follow-up">
-                                                                            <Setter Property="Foreground" Value="#B45309" />
-                                                                        </DataTrigger>
-                                                                        <DataTrigger Binding="{Binding Status}" Value="Contacted">
-                                                                            <Setter Property="Foreground" Value="#6D28D9" />
+                                                                        <DataTrigger Binding="{Binding IsExpanded}" Value="True">
+                                                                            <Setter Property="Text" Value="▼"/>
                                                                         </DataTrigger>
                                                                     </Style.Triggers>
                                                                 </Style>
                                                             </TextBlock.Style>
                                                         </TextBlock>
+                                                    </Button>
+
+                                                    <!-- Folder Icon -->
+                                                    <TextBlock Grid.Column="1" Text="📁" FontSize="18" VerticalAlignment="Center" Margin="0,0,10,0"/>
+
+                                                    <!-- Client Name & Badges -->
+                                                    <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                                                        <TextBlock Text="{Binding FullName}" FontSize="15" FontWeight="Bold"
+                                                                   Foreground="{StaticResource TextPrimaryBrush}" VerticalAlignment="Center"/>
+
+                                                        <!-- File count badge -->
+                                                        <Border Background="#F1F5F9" CornerRadius="6" Padding="8,3" Margin="14,0,0,0" VerticalAlignment="Center">
+                                                            <TextBlock Text="{Binding FileCount, StringFormat={}{0} files}" FontSize="11" Foreground="#475569" FontWeight="Medium"/>
+                                                        </Border>
+
+                                                        <!-- Leads count badge -->
+                                                        <Border Background="#EFF6FF" CornerRadius="6" Padding="8,3" Margin="8,0,0,0" VerticalAlignment="Center">
+                                                            <TextBlock Text="{Binding TotalLeads, StringFormat={}{0:N0} leads}" FontSize="11" Foreground="#2563EB" FontWeight="Medium"/>
+                                                        </Border>
+
+                                                        <!-- Assigned to you chip -->
+                                                        <Border Background="#ECFDF5" BorderBrush="#A7F3D0" BorderThickness="1" CornerRadius="6" Padding="8,3" Margin="8,0,0,0" VerticalAlignment="Center">
+                                                            <TextBlock Text="👤 Assigned to you" FontSize="11" Foreground="#047857" FontWeight="SemiBold"/>
+                                                        </Border>
+                                                    </StackPanel>
+                                                </Grid>
+                                            </Border>
+
+                                            <!-- EXPANDED CONTENT: Client's Uploaded Files -->
+                                            <Border BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,1,0,0" Padding="20,16" Background="#FAFAFA"
+                                                    Visibility="{Binding IsExpanded, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                                <StackPanel>
+                                                    <TextBlock Text="Client Leads Files" FontSize="12" FontWeight="SemiBold"
+                                                               Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,10"/>
+
+                                                    <!-- Files List -->
+                                                    <ItemsControl ItemsSource="{Binding Files}">
+                                                        <ItemsControl.ItemTemplate>
+                                                            <DataTemplate>
+                                                                <Border Background="White" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
+                                                                        CornerRadius="8" Padding="14,10" Margin="0,0,0,8">
+                                                                    <Grid>
+                                                                        <Grid.ColumnDefinitions>
+                                                                            <ColumnDefinition Width="Auto"/> <!-- File Icon -->
+                                                                            <ColumnDefinition Width="*"/>    <!-- Name, Size, Date -->
+                                                                            <ColumnDefinition Width="Auto"/> <!-- Leads Badge -->
+                                                                            <ColumnDefinition Width="Auto"/> <!-- Preview Button -->
+                                                                            <ColumnDefinition Width="Auto"/> <!-- Export Button -->
+                                                                        </Grid.ColumnDefinitions>
+
+                                                                        <TextBlock Grid.Column="0" Text="📄" FontSize="20" VerticalAlignment="Center" Margin="0,0,12,0"/>
+
+                                                                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                                                            <TextBlock Text="{Binding FileName}" FontSize="13" FontWeight="SemiBold"
+                                                                                       Foreground="{StaticResource TextPrimaryBrush}"/>
+                                                                            <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
+                                                                                <TextBlock Text="{Binding FileSize}" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}"/>
+                                                                                <TextBlock Text=" · " FontSize="11" Foreground="{StaticResource TextSecondaryBrush}"/>
+                                                                                <TextBlock Text="{Binding FormattedDate}" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}"/>
+                                                                            </StackPanel>
+                                                                        </StackPanel>
+
+                                                                        <!-- Leads badge -->
+                                                                        <Border Grid.Column="2" Background="#EFF6FF" BorderBrush="#BFDBFE" BorderThickness="1"
+                                                                                CornerRadius="6" Padding="8,4" VerticalAlignment="Center" Margin="0,0,12,0">
+                                                                            <TextBlock FontSize="11.5" Foreground="#2563EB" FontWeight="SemiBold">
+                                                                                <Run Text="{Binding TotalLeads, Mode=OneWay, StringFormat={}{0:N0}}"/>
+                                                                                <Run Text=" leads"/>
+                                                                            </TextBlock>
+                                                                        </Border>
+
+                                                                        <!-- Preview Button -->
+                                                                        <Button Grid.Column="3"
+                                                                                Command="{Binding DataContext.UserDashboard.PreviewFileCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                                                CommandParameter="{Binding}"
+                                                                                Style="{StaticResource SecondaryButtonStyle}"
+                                                                                Padding="12,6" Margin="0,0,8,0" FontSize="11.5"
+                                                                                ToolTip="Preview and call leads in this file">
+                                                                            <TextBlock Text="👁 Preview"/>
+                                                                        </Button>
+
+                                                                        <!-- Export Button (Agent work export) -->
+                                                                        <Button Grid.Column="4"
+                                                                                Command="{Binding DataContext.UserDashboard.ExportFileCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                                                CommandParameter="{Binding}"
+                                                                                Style="{StaticResource ExportButtonStyle}"
+                                                                                Padding="12,6" FontSize="11.5"
+                                                                                ToolTip="Export updated leads with latest call records and notes">
+                                                                            <TextBlock Text="📥 Export"/>
+                                                                        </Button>
+                                                                    </Grid>
+                                                                </Border>
+                                                            </DataTemplate>
+                                                        </ItemsControl.ItemTemplate>
+                                                    </ItemsControl>
+
+                                                    <!-- Empty Files Placeholder -->
+                                                    <Border Background="White" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
+                                                            CornerRadius="8" Padding="16"
+                                                            Visibility="{Binding Files.Count, Converter={StaticResource ZeroToVisibilityConverter}, FallbackValue=Collapsed}">
+                                                        <TextBlock Text="No files available for this client yet." FontSize="12" Foreground="#64748B" HorizontalAlignment="Center"/>
+                                                    </Border>
+                                                </StackPanel>
+                                            </Border>
+                                        </StackPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                    </StackPanel>
+                </ScrollViewer>
+            </Grid>
+        </Grid>
+
+        <!-- ===== ASYNC OPERATION LOADING MODAL WITH CANCEL ===== -->
+        <Border Grid.RowSpan="2"
+                Background="#770F172A"
+                Panel.ZIndex="100"
+                Visibility="{Binding UserDashboard.IsLoadingModalOpen, Converter={StaticResource BooleanToVisibilityConverter}}">
+            <Border Background="White" CornerRadius="14" Padding="32,28" Width="420"
+                    BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
+                    HorizontalAlignment="Center" VerticalAlignment="Center">
+                <Border.Effect>
+                    <DropShadowEffect Color="#0F172A" BlurRadius="36" ShadowDepth="6" Direction="270" Opacity="0.18"/>
+                </Border.Effect>
+                <StackPanel HorizontalAlignment="Center">
+                    <!-- Progress Bar / Spinner -->
+                    <ProgressBar IsIndeterminate="True" Height="4" Width="320" Margin="0,0,0,20"
+                                 Foreground="#2563EB" Background="#E2E8F0" BorderThickness="0"/>
+
+                    <TextBlock Text="{Binding UserDashboard.LoadingModalTitle}" FontSize="17" FontWeight="Bold"
+                               Foreground="{StaticResource TextPrimaryBrush}" HorizontalAlignment="Center" Margin="0,0,0,8"/>
+
+                    <TextBlock Text="{Binding UserDashboard.LoadingModalMessage}" FontSize="13"
+                               Foreground="{StaticResource TextSecondaryBrush}" HorizontalAlignment="Center" TextAlignment="Center"
+                               TextWrapping="Wrap" Margin="0,0,0,6"/>
+
+                    <TextBlock Text="{Binding UserDashboard.LoadingModalDetail}" FontSize="11.5" Foreground="#94A3B8"
+                               HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" Margin="0,0,0,22"/>
+
+                    <!-- Cancel Button -->
+                    <Button Content="✕ Cancel Operation"
+                            Command="{Binding UserDashboard.CancelLoadingModalCommand}"
+                            Style="{StaticResource DangerButtonStyle}"
+                            Padding="22,7" FontSize="12" HorizontalAlignment="Center"/>
+                </StackPanel>
+            </Border>
+        </Border>
+
+        <!-- ===== FILE PREVIEW MODAL OVERLAY (IDENTICAL TABLE STRUCTURE & FEATURES TO ADMIN) ===== -->
+        <Border Grid.RowSpan="2"
+                Background="#770F172A"
+                Panel.ZIndex="40"
+                Visibility="{Binding UserDashboard.IsPreviewOpen, Converter={StaticResource BooleanToVisibilityConverter}}">
+            <Border Background="White" CornerRadius="12" Margin="32"
+                    BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
+                    VerticalAlignment="Stretch" HorizontalAlignment="Stretch">
+                <Border.Effect>
+                    <DropShadowEffect Color="#0F172A" BlurRadius="40" ShadowDepth="6" Direction="270" Opacity="0.14"/>
+                </Border.Effect>
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>  <!-- Header -->
+                        <RowDefinition Height="Auto"/>  <!-- Search bar -->
+                        <RowDefinition Height="*"/>     <!-- Data table -->
+                        <RowDefinition Height="Auto"/>  <!-- Footer -->
+                    </Grid.RowDefinitions>
+
+                    <!-- Preview Header -->
+                    <Border Grid.Row="0" Background="#F8FAFC" CornerRadius="12,12,0,0"
+                            BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1"
+                            Padding="24,18">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="📄" FontSize="22" VerticalAlignment="Center" Margin="0,0,12,0"/>
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                <TextBlock Text="{Binding UserDashboard.PreviewTitle}" FontSize="16" FontWeight="Bold"
+                                           Foreground="{StaticResource TextPrimaryBrush}" TextTrimming="CharacterEllipsis"/>
+                                <TextBlock Text="{Binding UserDashboard.PreviewSubtitle}" FontSize="12"
+                                           Foreground="{StaticResource TextSecondaryBrush}" Margin="0,2,0,0"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                                <Border Background="#ECFDF5" BorderBrush="#A7F3D0" BorderThickness="1" CornerRadius="8" Padding="8,3" Margin="0,0,12,0">
+                                    <TextBlock Text="⚡ Real-time Sync Active" FontSize="11" Foreground="#047857" FontWeight="SemiBold"/>
+                                </Border>
+                                <Button Command="{Binding UserDashboard.ClosePreviewCommand}"
+                                        Background="Transparent" BorderThickness="0" Cursor="Hand" Padding="8">
+                                    <TextBlock Text="✕" FontSize="14" Foreground="#94A3B8"/>
+                                </Button>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+
+                    <!-- Search Bar -->
+                    <Border Grid.Row="1" Padding="20,12" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1">
+                        <Grid>
+                            <TextBox Text="{Binding UserDashboard.PreviewSearchText, UpdateSourceTrigger=PropertyChanged}"
+                                     Style="{StaticResource ModernTextBoxStyle}"
+                                     Padding="36,9,12,9"/>
+                            <TextBlock Text="🔍" Foreground="#94A3B8" FontSize="13"
+                                       VerticalAlignment="Center" HorizontalAlignment="Left" Margin="12,0,0,0"
+                                       IsHitTestVisible="False"/>
+                            <TextBlock Text="Search business name, contact, phone, disposition, agent, notes…"
+                                       Foreground="#94A3B8" FontSize="13"
+                                       VerticalAlignment="Center" Margin="38,0,0,0"
+                                       IsHitTestVisible="False">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding UserDashboard.PreviewSearchText}" Value="">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding UserDashboard.PreviewSearchText}" Value="{x:Null}">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </Grid>
+                    </Border>
+
+                    <!-- Loading Preview Spinner -->
+                    <Border Grid.Row="2"
+                            Visibility="{Binding UserDashboard.IsLoadingPreview, Converter={StaticResource BooleanToVisibilityConverter}}"
+                            VerticalAlignment="Center" HorizontalAlignment="Center">
+                        <StackPanel>
+                            <TextBlock Text="⏳" FontSize="32" HorizontalAlignment="Center" Margin="0,0,0,10"/>
+                            <TextBlock Text="Loading leads data…" FontSize="13" Foreground="#64748B" HorizontalAlignment="Center"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Preview Data Grid (With Identical Columns and Features to Admin) -->
+                    <DataGrid Grid.Row="2"
+                              ItemsSource="{Binding UserDashboard.FilteredPreviewLeads}"
+                              AutoGenerateColumns="False"
+                              CanUserAddRows="False"
+                              CanUserDeleteRows="False"
+                              SelectionMode="Single"
+                              GridLinesVisibility="None"
+                              HorizontalGridLinesBrush="{x:Null}"
+                              VerticalGridLinesBrush="{x:Null}"
+                              Background="White"
+                              RowBackground="White"
+                              AlternatingRowBackground="#F8FAFC"
+                              BorderThickness="0"
+                              ColumnHeaderStyle="{StaticResource ModernDataGridColumnHeaderStyle}"
+                              RowStyle="{StaticResource ModernDataGridRowStyle}"
+                              CellStyle="{StaticResource CenteredCellStyle}"
+                              AlternationCount="2"
+                              RowHeight="40"
+                              EnableRowVirtualization="True"
+                              VirtualizingPanel.IsVirtualizing="True"
+                              VirtualizingPanel.VirtualizationMode="Standard"
+                              VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Auto"
+                              Visibility="{Binding UserDashboard.IsLoadingPreview, Converter={StaticResource InverseBoolToVisibilityConverter}}">
+                        <DataGrid.Resources>
+                            <!-- Global cell text style: removes any underline and centers text vertically -->
+                            <Style TargetType="TextBlock">
+                                <Setter Property="VerticalAlignment" Value="Center"/>
+                                <Setter Property="TextDecorations" Value="{x:Null}"/>
+                            </Style>
+                        </DataGrid.Resources>
+                        <DataGrid.Columns>
+                            <!-- 1. DATE with Calendar Picker -->
+                            <DataGridTemplateColumn Header="DATE" Width="135" CanUserSort="True" SortMemberPath="SelectedDate">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <DatePicker SelectedDate="{Binding SelectedDate, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                     Height="28" VerticalAlignment="Center" VerticalContentAlignment="Center"
+                                                     BorderBrush="#CBD5E1" Background="White" Padding="4,1"
+                                                     ToolTip="Pick a date for this call"/>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+
+                            <!-- 2. CALL DISPOSITION Dropdown with Color Coding -->
+                            <DataGridTemplateColumn Header="CALL DISPOSITION" Width="190" CanUserSort="True" SortMemberPath="CallDisposition">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <ComboBox ItemsSource="{Binding Source={x:Static models:CallDispositionHelper.Dispositions}}"
+                                                  SelectedValue="{Binding CallDisposition, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                  SelectedValuePath="Name"
+                                                  Height="30" VerticalAlignment="Center"
+                                                  BorderBrush="#CBD5E1" Background="White">
+                                            <ComboBox.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Border Background="{Binding BackgroundHex}"
+                                                            BorderBrush="{Binding BorderHex}"
+                                                            BorderThickness="1" CornerRadius="8"
+                                                            Padding="8,3" Margin="0,1" HorizontalAlignment="Stretch">
+                                                        <TextBlock Text="{Binding Name}"
+                                                                   Foreground="{Binding ForegroundHex}"
+                                                                   FontWeight="SemiBold" FontSize="11.5"/>
                                                     </Border>
                                                 </DataTemplate>
-                                            </DataGridTemplateColumn.CellTemplate>
-                                        </DataGridTemplateColumn>
+                                            </ComboBox.ItemTemplate>
+                                        </ComboBox>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
 
-                                        <!-- Business Name -->
-                                        <DataGridTextColumn Header="BUSINESS NAME" Binding="{Binding BusinessName}" Width="190" FontWeight="SemiBold" />
-
-                                        <!-- Contact Name -->
-                                        <DataGridTextColumn Header="CONTACT PERSON" Binding="{Binding ContactName}" Width="150" />
-
-                                        <!-- Phone -->
-                                        <DataGridTemplateColumn Header="PHONE NUMBER" Width="140">
-                                            <DataGridTemplateColumn.CellTemplate>
+                            <!-- 3. AGENT Assigned Dropdown -->
+                            <DataGridTemplateColumn Header="AGENT" Width="150" CanUserSort="True" SortMemberPath="AssignedAgent">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <ComboBox ItemsSource="{Binding AvailableAgentOptions}"
+                                                  SelectedItem="{Binding AssignedAgent, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                  Height="30" VerticalAlignment="Center"
+                                                  BorderBrush="#CBD5E1" Background="White">
+                                            <ComboBox.ItemTemplate>
                                                 <DataTemplate>
-                                                    <TextBlock Text="{Binding FormattedPhone}" FontFamily="Consolas, Segoe UI" FontSize="12" VerticalAlignment="Center" />
+                                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                        <TextBlock Text="👤 " FontSize="11" Foreground="#64748B"/>
+                                                        <TextBlock Text="{Binding}" FontSize="12" Foreground="#0F172A" FontWeight="Medium"/>
+                                                    </StackPanel>
                                                 </DataTemplate>
-                                            </DataGridTemplateColumn.CellTemplate>
-                                        </DataGridTemplateColumn>
+                                            </ComboBox.ItemTemplate>
+                                        </ComboBox>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
 
-                                        <!-- City -->
-                                        <DataGridTextColumn Header="CITY" Binding="{Binding City}" Width="110" />
+                            <!-- 4. NOTES (Editable) -->
+                            <DataGridTemplateColumn Header="NOTES" Width="220" CanUserSort="True" SortMemberPath="Notes">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <TextBox Text="{Binding Notes, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                                                 Height="28" VerticalContentAlignment="Center"
+                                                 Padding="6,2" BorderBrush="#CBD5E1" BorderThickness="1"
+                                                 Background="White" FontSize="12"
+                                                 ToolTip="{Binding Notes}"/>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
 
-                                        <!-- Action -->
-                                        <DataGridTemplateColumn Header="ACTION" Width="110">
-                                            <DataGridTemplateColumn.CellTemplate>
-                                                <DataTemplate>
-                                                    <Button Content="📞 Call" 
-                                                            Style="{StaticResource PrimaryButtonStyle}" 
-                                                            Padding="10,4" 
-                                                            FontSize="11" 
-                                                            VerticalAlignment="Center" />
-                                                </DataTemplate>
-                                            </DataGridTemplateColumn.CellTemplate>
-                                        </DataGridTemplateColumn>
-                                    </DataGrid.Columns>
-                                </DataGrid>
+                            <!-- 5. # OF CALL (Auto-incremented on Dial, Not editable) -->
+                            <DataGridTemplateColumn Header="# OF CALL" Width="95" CanUserSort="True" SortMemberPath="CallCount">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <Border Background="#F1F5F9" BorderBrush="#CBD5E1" BorderThickness="1" CornerRadius="5"
+                                                Height="28" Width="48" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding CallCount}" 
+                                                       FontWeight="Bold" FontSize="12" Foreground="#0F172A"
+                                                       HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                       ToolTip="Total calls dialed to this lead (auto-increments upon calling)"/>
+                                        </Border>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+
+                            <!-- 6. CELL NUMBER (Editable with Zoom Call Button on Left) -->
+                            <DataGridTemplateColumn Header="CELL NUMBER" Width="180" CanUserSort="True" SortMemberPath="CellNumber">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <Grid VerticalAlignment="Center">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+
+                                            <!-- Call Button: Dials number in Zoom & increments # of call -->
+                                            <Button Grid.Column="0"
+                                                    Command="{Binding DataContext.UserDashboard.CallLeadCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                    CommandParameter="{Binding}"
+                                                    Style="{StaticResource CallIconButtonStyle}"
+                                                    Margin="0,0,5,0"
+                                                    ToolTip="Call this number via Zoom Phone (auto-increments # OF CALL)">
+                                                <Path Data="M3.654 1.328a.678.678 0 0 0-1.015-.063L1.605 2.3c-.483.484-.661 1.169-.45 1.77a17.6 17.6 0 0 0 4.168 6.608 17.6 17.6 0 0 0 6.608 4.168c.601.211 1.286.033 1.77-.45l1.034-1.034a.678.678 0 0 0-.063-1.015l-2.307-1.794a.68.68 0 0 0-.58-.122l-2.19.547a1.75 1.75 0 0 1-1.657-.459L5.482 8.062a1.75 1.75 0 0 1-.46-1.657l.548-2.19a.68.68 0 0 0-.122-.58z"
+                                                      Fill="White" Stretch="Uniform" Width="12" Height="12"/>
+                                            </Button>
+
+                                            <!-- Cell Number TextBox (Editable) -->
+                                            <TextBox Grid.Column="1"
+                                                     Text="{Binding CellNumber, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                                                     Height="28" VerticalContentAlignment="Center"
+                                                     Padding="6,2" BorderBrush="#CBD5E1" BorderThickness="1"
+                                                     Background="White" FontSize="12"
+                                                     ToolTip="{Binding CellNumber}"/>
+                                        </Grid>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+
+                            <!-- 7. BUSINESS NAME (Editable) -->
+                            <DataGridTemplateColumn Header="BUSINESS NAME" Width="220" CanUserSort="True" SortMemberPath="BusinessName">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <TextBox Text="{Binding BusinessName, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                                                 Height="28" VerticalContentAlignment="Center"
+                                                 Padding="6,2" BorderBrush="#CBD5E1" BorderThickness="1"
+                                                 Background="White" FontSize="12" FontWeight="SemiBold"
+                                                 ToolTip="{Binding BusinessName}"/>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+
+                            <!-- 8. TITLE -->
+                            <DataGridTextColumn Header="TITLE" Binding="{Binding Title}" Width="120" IsReadOnly="True"/>
+
+                            <!-- 9. CONTACT NAME (Editable) -->
+                            <DataGridTemplateColumn Header="CONTACT NAME" Width="170" CanUserSort="True" SortMemberPath="ContactName">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <TextBox Text="{Binding ContactName, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                                                 Height="28" VerticalContentAlignment="Center"
+                                                 Padding="6,2" BorderBrush="#CBD5E1" BorderThickness="1"
+                                                 Background="White" FontSize="12"
+                                                 ToolTip="{Binding ContactName}"/>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+
+                            <!-- 10. EMAIL -->
+                            <DataGridTextColumn Header="EMAIL" Binding="{Binding Email}" Width="170" IsReadOnly="True"/>
+
+                            <!-- 11. ADDRESS -->
+                            <DataGridTextColumn Header="ADDRESS" Binding="{Binding Address}" Width="190" IsReadOnly="True"/>
+
+                            <!-- 12. CITY -->
+                            <DataGridTextColumn Header="CITY" Binding="{Binding City}" Width="110" IsReadOnly="True"/>
+
+                            <!-- 13. COUNTY -->
+                            <DataGridTextColumn Header="COUNTY" Binding="{Binding County}" Width="110" IsReadOnly="True"/>
+
+                            <!-- 14. STATE -->
+                            <DataGridTextColumn Header="STATE" Binding="{Binding State}" Width="65" IsReadOnly="True"/>
+
+                            <!-- 15. ZIP CODE -->
+                            <DataGridTextColumn Header="ZIP CODE" Binding="{Binding ZipCode}" Width="85" IsReadOnly="True"/>
+
+                            <!-- 16. FAX -->
+                            <DataGridTextColumn Header="FAX" Binding="{Binding Fax}" Width="110" IsReadOnly="True"/>
+
+                            <!-- 17. ANNUAL SALES -->
+                            <DataGridTextColumn Header="ANNUAL SALES" Binding="{Binding AnnualSales}" Width="140" IsReadOnly="True"/>
+
+                            <!-- 18. NUMBER OF EMP -->
+                            <DataGridTextColumn Header="NUMBER OF EMP" Binding="{Binding NumberOfEmployees}" Width="115" IsReadOnly="True"/>
+
+                            <!-- 19. WEBSITE -->
+                            <DataGridTextColumn Header="WEBSITE" Binding="{Binding Website}" Width="160" IsReadOnly="True"/>
+
+                            <!-- 20. SIC CODE -->
+                            <DataGridTextColumn Header="SIC CODE" Binding="{Binding SicCode}" Width="95" IsReadOnly="True"/>
+
+                            <!-- 21. SIC DESCRIPTION -->
+                            <DataGridTextColumn Header="SIC DESCRIPTION" Binding="{Binding SicDescription}" Width="170" IsReadOnly="True"/>
+
+                            <!-- 22. NAICS CODE -->
+                            <DataGridTextColumn Header="NAICS CODE" Binding="{Binding NaicsCode}" Width="95" IsReadOnly="True"/>
+
+                            <!-- 23. NAICS DESCRIPTION -->
+                            <DataGridTextColumn Header="NAICS DESCRIPTION" Binding="{Binding NaicsDescription}" Width="170" IsReadOnly="True"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+
+                    <!-- Preview Footer -->
+                    <Border Grid.Row="3" Background="#F8FAFC" CornerRadius="0,0,12,12"
+                            BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,1,0,0"
+                            Padding="24,14">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                                <TextBlock Text="Showing " FontSize="12" Foreground="{StaticResource TextSecondaryBrush}"/>
+                                <TextBlock Text="{Binding UserDashboard.FilteredPreviewLeads.Count, Mode=OneWay, StringFormat={}{0:N0}}"
+                                           FontSize="12" FontWeight="Bold" Foreground="{StaticResource TextPrimaryBrush}"/>
+                                <TextBlock Text=" leads" FontSize="12" Foreground="{StaticResource TextSecondaryBrush}"/>
                             </StackPanel>
-                        </Border>
+                            <Button Grid.Column="1" Content="Close"
+                                    Command="{Binding UserDashboard.ClosePreviewCommand}"
+                                    Style="{StaticResource SecondaryButtonStyle}"
+                                    Padding="18,6" FontSize="12"/>
+                        </Grid>
+                    </Border>
+                </Grid>
+            </Border>
+        </Border>
 
-                        <!-- Right: Agent Guidelines Card -->
-                        <Border Grid.Column="2" Style="{StaticResource CardBorderStyle}" Padding="22">
-                            <StackPanel>
-                                <TextBlock Text="Agent Guidelines" FontSize="16" FontWeight="Bold" Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,14" />
-
-                                <Border Background="#EFF6FF" BorderBrush="#BFDBFE" BorderThickness="1" CornerRadius="6" Padding="12" Margin="0,0,0,12">
-                                    <StackPanel>
-                                        <TextBlock Text="🎯 Standard Outreach Role" FontWeight="Bold" FontSize="12" Foreground="#1E40AF" />
-                                        <TextBlock Text="You are logged in with the Standard Agent role. You have focused access to assigned leads and call queues without system administrative privileges." 
-                                                   FontSize="11.5" 
-                                                   Foreground="#1E40AF" 
-                                                   TextWrapping="Wrap" 
-                                                   Margin="0,4,0,0" />
-                                    </StackPanel>
-                                </Border>
-
-                                <Border Background="#F8FAFC" CornerRadius="6" Padding="12" Margin="0,0,0,12">
-                                    <StackPanel>
-                                        <TextBlock Text="DISPOSITION CRITERIA" FontSize="10.5" FontWeight="Bold" Foreground="{StaticResource TextSecondaryBrush}" />
-                                        <TextBlock Text="• Qualified: Lead confirmed interest and meets business criteria." FontSize="11" Foreground="{StaticResource TextPrimaryBrush}" Margin="0,4,0,0" TextWrapping="Wrap" />
-                                        <TextBlock Text="• Follow-up: Decision maker requested a specific callback." FontSize="11" Foreground="{StaticResource TextPrimaryBrush}" Margin="0,4,0,0" TextWrapping="Wrap" />
-                                        <TextBlock Text="• Contacted: Pitch completed, awaiting review." FontSize="11" Foreground="{StaticResource TextPrimaryBrush}" Margin="0,4,0,0" TextWrapping="Wrap" />
-                                    </StackPanel>
-                                </Border>
-
-                                <Border Background="#ECFDF5" BorderBrush="#A7F3D0" BorderThickness="1" CornerRadius="6" Padding="12">
-                                    <StackPanel>
-                                        <TextBlock Text="⚡ Need More Leads?" FontWeight="Bold" FontSize="12" Foreground="#065F46" />
-                                        <TextBlock Text="New leads are imported and assigned to your queue by administrators." 
-                                                   FontSize="11.5" 
-                                                   Foreground="#065F46" 
-                                                   TextWrapping="Wrap" 
-                                                   Margin="0,4,0,0" />
-                                    </StackPanel>
-                                </Border>
-                            </StackPanel>
-                        </Border>
-                    </Grid>
-
-                </StackPanel>
-            </ScrollViewer>
-        </Grid>
     </Grid>
 </UserControl>
-

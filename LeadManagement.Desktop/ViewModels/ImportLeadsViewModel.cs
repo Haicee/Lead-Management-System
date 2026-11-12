@@ -554,21 +554,36 @@ namespace LeadManagement.Desktop.ViewModels
 
             int GetColIndex(params string[] aliases)
             {
-                for (int i = 0; i < headers.Count; i++)
+                // Pass 1: Exact matches first
+                foreach (var alias in aliases)
                 {
-                    foreach (var alias in aliases)
+                    for (int i = 0; i < headers.Count; i++)
                     {
-                        if (headers[i].Equals(alias, StringComparison.OrdinalIgnoreCase) ||
-                            headers[i].Contains(alias, StringComparison.OrdinalIgnoreCase))
-                        {
+                        if (string.Equals(headers[i], alias, StringComparison.OrdinalIgnoreCase))
                             return i;
-                        }
+                    }
+                }
+
+                // Pass 2: Substring matches (excluding generic collisions)
+                foreach (var alias in aliases)
+                {
+                    if (alias.Equals("name", StringComparison.OrdinalIgnoreCase))
+                        continue;
+
+                    for (int i = 0; i < headers.Count; i++)
+                    {
+                        var h = headers[i];
+                        if (alias.Contains("contact") && (h.Contains("business") || h.Contains("company")))
+                            continue;
+
+                        if (h.Contains(alias, StringComparison.OrdinalIgnoreCase))
+                            return i;
                     }
                 }
                 return -1;
             }
 
-            int idxBusiness = GetColIndex("business name", "company", "business");
+            int idxBusiness = GetColIndex("business name", "company name", "business", "company");
             int idxAddress  = GetColIndex("address", "street");
             int idxCity     = GetColIndex("city");
             int idxCounty   = GetColIndex("county");
@@ -579,12 +594,26 @@ namespace LeadManagement.Desktop.ViewModels
             int idxSales    = GetColIndex("annual sales", "sales");
             int idxEmp      = GetColIndex("number of employee", "employees", "number of employees");
             int idxTitle    = GetColIndex("title", "job title");
-            int idxContact  = GetColIndex("contact name", "contact", "name");
+            int idxContact  = GetColIndex("contact name", "contact person", "contact", "contact_name", "full name", "person name", "contactname", "name");
             int idxWeb      = GetColIndex("website", "web", "url", "site");
             int idxSicCode  = GetColIndex("sic code", "sic");
             int idxSicDesc  = GetColIndex("sic description", "sic desc");
             int idxNaicsCod = GetColIndex("naics code", "naics");
             int idxNaicsDes = GetColIndex("naics description", "naics desc");
+
+            if (idxContact == idxBusiness) idxContact = -1;
+
+            string CleanContactName(string raw)
+            {
+                if (string.IsNullOrWhiteSpace(raw)) return string.Empty;
+                var trimmed = raw.Trim();
+                if (trimmed.Equals("contact name", StringComparison.OrdinalIgnoreCase) ||
+                    trimmed.Equals("contact", StringComparison.OrdinalIgnoreCase) ||
+                    trimmed.Equals("contact_name", StringComparison.OrdinalIgnoreCase) ||
+                    trimmed.Equals("name", StringComparison.OrdinalIgnoreCase))
+                    return string.Empty;
+                return trimmed;
+            }
 
             string SafeGet(string[] parts, int index, int fallbackIndex, string defaultVal = "")
             {
@@ -614,11 +643,16 @@ namespace LeadManagement.Desktop.ViewModels
                 if (string.IsNullOrWhiteSpace(line)) continue;
                 var parts = SplitCsvLine(line);
 
+                var bName = SafeGet(parts, idxBusiness, 0, "Unnamed Business");
+                if (bName.Equals("business name", StringComparison.OrdinalIgnoreCase) ||
+                    bName.Equals("business", StringComparison.OrdinalIgnoreCase))
+                    continue; // Skip repeated header rows
+
                 var lead = new LeadModel
                 {
                     Id = rowId++,
                     BatchName = BatchName,
-                    BusinessName = SafeGet(parts, idxBusiness, 0, "Unnamed Business"),
+                    BusinessName = bName,
                     Address = SafeGet(parts, idxAddress, 1),
                     City = SafeGet(parts, idxCity, 2),
                     County = SafeGet(parts, idxCounty, 3),
@@ -629,7 +663,7 @@ namespace LeadManagement.Desktop.ViewModels
                     AnnualSales = SafeGet(parts, idxSales, 8, "Less than 500,000"),
                     NumberOfEmployees = SafeGet(parts, idxEmp, 9, "1 to 4"),
                     Title = SafeGet(parts, idxTitle, 10),
-                    ContactName = SafeGet(parts, idxContact, 11),
+                    ContactName = CleanContactName(SafeGet(parts, idxContact, 11)),
                     Website = SafeGet(parts, idxWeb, 12),
                     SicCode = SafeGet(parts, idxSicCode, 13, "58120000"),
                     SicDescription = SafeGet(parts, idxSicDesc, 14, "EATING PLACES"),
@@ -681,19 +715,36 @@ namespace LeadManagement.Desktop.ViewModels
 
             int GetColIndex(params string[] aliases)
             {
-                for (int i = 0; i < headers.Count; i++)
+                // Pass 1: Exact matches first
+                foreach (var alias in aliases)
                 {
-                    foreach (var alias in aliases)
+                    for (int i = 0; i < headers.Count; i++)
                     {
-                        if (headers[i].Equals(alias, StringComparison.OrdinalIgnoreCase) ||
-                            headers[i].Contains(alias, StringComparison.OrdinalIgnoreCase))
+                        if (string.Equals(headers[i], alias, StringComparison.OrdinalIgnoreCase))
+                            return i;
+                    }
+                }
+
+                // Pass 2: Substring matches (excluding generic collisions)
+                foreach (var alias in aliases)
+                {
+                    if (alias.Equals("name", StringComparison.OrdinalIgnoreCase))
+                        continue;
+
+                    for (int i = 0; i < headers.Count; i++)
+                    {
+                        var h = headers[i];
+                        if (alias.Contains("contact") && (h.Contains("business") || h.Contains("company")))
+                            continue;
+
+                        if (h.Contains(alias, StringComparison.OrdinalIgnoreCase))
                             return i;
                     }
                 }
                 return -1;
             }
 
-            int idxBusiness = GetColIndex("business name", "company", "business");
+            int idxBusiness = GetColIndex("business name", "company name", "business", "company");
             int idxAddress  = GetColIndex("address", "street");
             int idxCity     = GetColIndex("city");
             int idxCounty   = GetColIndex("county");
@@ -704,12 +755,26 @@ namespace LeadManagement.Desktop.ViewModels
             int idxSales    = GetColIndex("annual sales", "sales");
             int idxEmp      = GetColIndex("number of employee", "employees", "number of employees");
             int idxTitle    = GetColIndex("title", "job title");
-            int idxContact  = GetColIndex("contact name", "contact", "name");
+            int idxContact  = GetColIndex("contact name", "contact person", "contact", "contact_name", "full name", "person name", "contactname", "name");
             int idxWeb      = GetColIndex("website", "web", "url", "site");
             int idxSicCode  = GetColIndex("sic code", "sic");
             int idxSicDesc  = GetColIndex("sic description", "sic desc");
             int idxNaicsCod = GetColIndex("naics code", "naics");
             int idxNaicsDes = GetColIndex("naics description", "naics desc");
+
+            if (idxContact == idxBusiness) idxContact = -1;
+
+            string CleanContactName(string raw)
+            {
+                if (string.IsNullOrWhiteSpace(raw)) return string.Empty;
+                var trimmed = raw.Trim();
+                if (trimmed.Equals("contact name", StringComparison.OrdinalIgnoreCase) ||
+                    trimmed.Equals("contact", StringComparison.OrdinalIgnoreCase) ||
+                    trimmed.Equals("contact_name", StringComparison.OrdinalIgnoreCase) ||
+                    trimmed.Equals("name", StringComparison.OrdinalIgnoreCase))
+                    return string.Empty;
+                return trimmed;
+            }
 
             string SafeGet(string[] parts, int index, int fallbackIndex, string defaultVal = "")
             {
@@ -753,11 +818,16 @@ namespace LeadManagement.Desktop.ViewModels
 
                 if (parts.All(string.IsNullOrWhiteSpace)) continue;
 
+                var bName = SafeGet(parts, idxBusiness, 0, "Unnamed Business");
+                if (bName.Equals("business name", StringComparison.OrdinalIgnoreCase) ||
+                    bName.Equals("business", StringComparison.OrdinalIgnoreCase))
+                    continue; // Skip repeated header rows
+
                 var lead = new LeadModel
                 {
                     Id               = rowId++,
                     BatchName        = BatchName,
-                    BusinessName     = SafeGet(parts, idxBusiness, 0, "Unnamed Business"),
+                    BusinessName     = bName,
                     Address          = SafeGet(parts, idxAddress,  1),
                     City             = SafeGet(parts, idxCity,     2),
                     County           = SafeGet(parts, idxCounty,   3),
@@ -768,7 +838,7 @@ namespace LeadManagement.Desktop.ViewModels
                     AnnualSales      = SafeGet(parts, idxSales,    8, "Less than 500,000"),
                     NumberOfEmployees= SafeGet(parts, idxEmp,      9, "1 to 4"),
                     Title            = SafeGet(parts, idxTitle,   10),
-                    ContactName      = SafeGet(parts, idxContact, 11),
+                    ContactName      = CleanContactName(SafeGet(parts, idxContact, 11)),
                     Website          = SafeGet(parts, idxWeb,     12),
                     SicCode          = SafeGet(parts, idxSicCode, 13, "58120000"),
                     SicDescription   = SafeGet(parts, idxSicDesc, 14, "EATING PLACES"),

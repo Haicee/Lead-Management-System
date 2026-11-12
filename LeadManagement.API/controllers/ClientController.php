@@ -21,11 +21,23 @@ class ClientController
      */
     public function index(): void
     {
-        $stmt = $this->db->query("
-            SELECT id, first_name, last_name, created_at, updated_at
-            FROM `clients`
-            ORDER BY `id` DESC
-        ");
+        $agentId = isset($_GET['agent_id']) ? (int)$_GET['agent_id'] : (isset($_GET['user_id']) ? (int)$_GET['user_id'] : null);
+        if ($agentId && $agentId > 0) {
+            $stmt = $this->db->prepare("
+                SELECT c.id, c.first_name, c.last_name, c.created_at, c.updated_at
+                FROM `clients` c
+                INNER JOIN `client_agents` ca ON c.id = ca.client_id
+                WHERE ca.user_id = ?
+                ORDER BY c.id DESC
+            ");
+            $stmt->execute([$agentId]);
+        } else {
+            $stmt = $this->db->query("
+                SELECT id, first_name, last_name, created_at, updated_at
+                FROM `clients`
+                ORDER BY `id` DESC
+            ");
+        }
         $clients = $stmt->fetchAll();
 
         // Attach files and assigned agents for each client

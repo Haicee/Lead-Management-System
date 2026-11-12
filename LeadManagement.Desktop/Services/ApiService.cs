@@ -492,13 +492,15 @@ namespace LeadManagement.Desktop.Services
         // =========================================================
 
         /// <summary>
-        /// Fetches all clients (with their files and assigned agents) from GET /clients.
+        /// Fetches clients (with their files and assigned agents) from GET /clients.
+        /// If agentId is provided, filters to only clients assigned to that agent.
         /// </summary>
-        public async Task<(bool Success, string Message, System.Collections.Generic.List<ClientModel>? Clients)> GetClientsAsync()
+        public async Task<(bool Success, string Message, System.Collections.Generic.List<ClientModel>? Clients)> GetClientsAsync(int? agentId = null)
         {
             try
             {
-                var response = await _httpClient.GetAsync("clients");
+                var endpoint = agentId.HasValue && agentId.Value > 0 ? $"clients?agent_id={agentId.Value}" : "clients";
+                var response = await _httpClient.GetAsync(endpoint);
                 var responseBody = await response.Content.ReadAsStringAsync();
                 var result = JsonSerializer.Deserialize<ApiResponse<System.Collections.Generic.List<ClientModel>>>(responseBody);
                 if (result == null) return (false, "Unable to parse server response.", null);
@@ -529,21 +531,22 @@ namespace LeadManagement.Desktop.Services
         /// <summary>Uploads a lead file to a specific client via POST /clients/{id}/files.</summary>
         public async Task<(bool Success, string Message, ClientFileModel? File)> UploadClientFileAsync(
             int clientId, string fileName, string fileSize,
-            System.Collections.Generic.IEnumerable<LeadModel> leads)
+            System.Collections.Generic.IEnumerable<LeadModel> leads,
+            System.Threading.CancellationToken ct = default)
         {
             try
             {
                 var payload = new { file_name = fileName, file_size = fileSize, user_id = CurrentUser?.Id, leads = leads };
                 var json = JsonSerializer.Serialize(payload);
                 var content = new StringContent(json, Encoding.UTF8, "application/json");
-                var response = await _httpClient.PostAsync($"clients/{clientId}/files", content);
-                var responseBody = await response.Content.ReadAsStringAsync();
+                var response = await _httpClient.PostAsync($"clients/{clientId}/files", content, ct);
+                var responseBody = await response.Content.ReadAsStringAsync(ct);
                 var result = JsonSerializer.Deserialize<ApiResponse<ClientFileModel>>(responseBody);
                 if (result == null) return (false, "Unable to parse server response.", null);
                 return (result.Success, result.Message, result.Data);
             }
+            catch (OperationCanceledException) { return (false, "Upload cancelled by user.", null); }
             catch (HttpRequestException) { return (false, "Cannot connect to server. Please ensure XAMPP Apache & MySQL are running.", null); }
-            catch (TaskCanceledException) { return (false, "Upload timed out. The file may be too large.", null); }
             catch (Exception ex) { return (false, $"Error uploading file: {ex.Message}", null); }
         }
 
@@ -584,16 +587,19 @@ namespace LeadManagement.Desktop.Services
         }
 
         /// <summary>Retrieves leads for a specific client file via GET /clients/files/{id}/leads.</summary>
-        public async Task<(bool Success, string Message, ClientFileLeadsData? Data)> GetClientFileLeadsAsync(int fileId)
+        public async Task<(bool Success, string Message, ClientFileLeadsData? Data)> GetClientFileLeadsAsync(
+            int fileId,
+            System.Threading.CancellationToken ct = default)
         {
             try
             {
-                var response = await _httpClient.GetAsync($"clients/files/{fileId}/leads");
-                var responseBody = await response.Content.ReadAsStringAsync();
+                var response = await _httpClient.GetAsync($"clients/files/{fileId}/leads", ct);
+                var responseBody = await response.Content.ReadAsStringAsync(ct);
                 var result = JsonSerializer.Deserialize<ApiResponse<ClientFileLeadsData>>(responseBody);
                 if (result == null) return (false, "Unable to parse server response.", null);
                 return (result.Success, result.Message, result.Data);
             }
+            catch (OperationCanceledException) { return (false, "Operation cancelled by user.", null); }
             catch (HttpRequestException) { return (false, "Cannot connect to server. Please ensure XAMPP Apache & MySQL are running.", null); }
             catch (Exception ex) { return (false, $"Error fetching file leads: {ex.Message}", null); }
         }

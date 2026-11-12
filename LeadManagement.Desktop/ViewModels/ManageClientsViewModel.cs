@@ -65,6 +65,13 @@ namespace LeadManagement.Desktop.ViewModels
         private ObservableCollection<LeadModel> _filteredPreviewLeads = new();
         private List<LeadModel> _allPreviewLeads = new();
 
+        // Loading Modal State (for upload and export operations with cancellation)
+        private bool _isLoadingModalOpen;
+        private string _loadingModalTitle = string.Empty;
+        private string _loadingModalMessage = string.Empty;
+        private string _loadingModalDetail = string.Empty;
+        private System.Threading.CancellationTokenSource? _loadingCts;
+
         // The full agent list (all role=user accounts) — loaded once
         private List<UserModel> _allAgents = new();
 
@@ -91,6 +98,12 @@ namespace LeadManagement.Desktop.ViewModels
             RefreshClientLeadsCommand = new RelayCommand<ClientModel>(async c => await LoadClientLeadsAsync(c));
             ClosePreviewCommand  = new RelayCommand(ExecuteClosePreview);
             DismissBannerCommand = new RelayCommand(ExecuteDismissBanner);
+            CallLeadCommand      = new RelayCommand<LeadModel>(ExecuteCallLead);
+            CancelLoadingModalCommand = new RelayCommand(ExecuteCancelLoadingModal);
+            ExportFileCommand    = new RelayCommand<ClientFileModel>(async f => await ExecuteExportFileAsync(f));
+
+            // Pre-warm Zoom Workplace in background so click-to-dial opens instantaneously
+            _ = Task.Run(() => ZoomPhoneService.EnsureZoomRunning());
         }
 
         // ----------------------------------------------------------------
@@ -220,6 +233,31 @@ namespace LeadManagement.Desktop.ViewModels
             set => SetProperty(ref _filteredPreviewLeads, value);
         }
 
+        // Loading Modal properties
+        public bool IsLoadingModalOpen
+        {
+            get => _isLoadingModalOpen;
+            set => SetProperty(ref _isLoadingModalOpen, value);
+        }
+
+        public string LoadingModalTitle
+        {
+            get => _loadingModalTitle;
+            set => SetProperty(ref _loadingModalTitle, value);
+        }
+
+        public string LoadingModalMessage
+        {
+            get => _loadingModalMessage;
+            set => SetProperty(ref _loadingModalMessage, value);
+        }
+
+        public string LoadingModalDetail
+        {
+            get => _loadingModalDetail;
+            set => SetProperty(ref _loadingModalDetail, value);
+        }
+
         // ----------------------------------------------------------------
         // Commands
         // ----------------------------------------------------------------
@@ -238,6 +276,9 @@ namespace LeadManagement.Desktop.ViewModels
         public ICommand RefreshClientLeadsCommand { get; }
         public ICommand ClosePreviewCommand { get; }
         public ICommand DismissBannerCommand { get; }
+        public ICommand CallLeadCommand { get; }
+        public ICommand CancelLoadingModalCommand { get; }
+        public ICommand ExportFileCommand { get; }
 
         // ----------------------------------------------------------------
         // Agent selection helpers (called from the View code-behind)
@@ -442,6 +483,15 @@ namespace LeadManagement.Desktop.ViewModels
                         case "call_count":
                             payload["call_count"] = lead.CallCount;
                             break;
+                        case "cell_number":
+                            payload["cell_number"] = lead.CellNumber;
+                            break;
+                        case "business_name":
+                            payload["business_name"] = lead.BusinessName;
+                            break;
+                        case "contact_name":
+                            payload["contact_name"] = lead.ContactName;
+                            break;
                         case "email":
                             payload["email"] = lead.Email;
                             break;
@@ -490,53 +540,238 @@ namespace LeadManagement.Desktop.ViewModels
             await ProcessFileUploadAsync(client, filePath);
         }
 
+        private void ExecuteCancelLoadingModal()
+        {
+            try
+            {
+                _loadingCts?.Cancel();
+            }
+            catch { }
+            IsLoadingModalOpen = false;
+        }
+
         private async Task ProcessFileUploadAsync(ClientModel client, string filePath)
         {
             var fileInfo = new FileInfo(filePath);
             var ext      = fileInfo.Extension.ToLowerInvariant();
             var sizeDisplay = $"{fileInfo.Length / 1024.0:F1} KB";
 
-            ShowBanner($"Parsing '{fileInfo.Name}'…", isError: false);
+            _loadingCts?.Dispose();
+            _loadingCts = new System.Threading.CancellationTokenSource();
+            var ct = _loadingCts.Token;
 
-            List<LeadModel>? leads;
+            LoadingModalTitle   = "Uploading Leads File";
+            LoadingModalMessage = $"Reading and parsing '{fileInfo.Name}'...";
+            LoadingModalDetail  = "Detecting columns and validating lead records...";
+            IsLoadingModalOpen  = true;
+
             try
             {
-                leads = ext == ".csv"
-                    ? ParseCsvFile(filePath)
-                    : ParseExcelFile(filePath);
+                List<LeadModel>? leads = null;
+                await Task.Run(() =>
+                {
+                    ct.ThrowIfCancellationRequested();
+                    leads = ext == ".csv"
+                        ? ParseCsvFile(filePath)
+                        : ParseExcelFile(filePath);
+                    ct.ThrowIfCancellationRequested();
+                }, ct);
+
+                if (leads == null || leads.Count == 0)
+                {
+                    ShowBanner("No data rows found in the selected file.", isError: true);
+                    return;
+                }
+
+                LoadingModalMessage = $"Uploading {leads.Count:N0} leads for '{client.FullName}'...";
+                LoadingModalDetail  = "Sending records to server and creating file entry...";
+
+                var (ok, msg, _) = await ApiService.Instance.UploadClientFileAsync(
+                    client.Id, fileInfo.Name, sizeDisplay, leads, ct);
+
+                if (ok)
+                {
+                    client.IsExpanded = true;
+                    ShowBanner($"✓ {leads.Count:N0} leads uploaded to '{client.FullName}' from '{fileInfo.Name}'.", isError: false);
+                    await LoadClientsAsync(preserveBanner: true);
+                    var updatedClient = Clients.FirstOrDefault(c => c.Id == client.Id);
+                    if (updatedClient != null)
+                    {
+                        updatedClient.IsExpanded = true;
+                        await LoadClientLeadsAsync(updatedClient);
+                    }
+                }
+                else
+                {
+                    if (ct.IsCancellationRequested)
+                    {
+                        ShowBanner("Upload cancelled by user.", isError: false);
+                    }
+                    else
+                    {
+                        ShowBanner($"Upload failed: {msg}", isError: true);
+                    }
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                ShowBanner("Upload cancelled by user.", isError: false);
             }
             catch (Exception ex)
             {
-                ShowBanner($"Could not parse file: {ex.Message}", isError: true);
-                return;
+                ShowBanner($"Could not parse or upload file: {ex.Message}", isError: true);
             }
-
-            if (leads == null || leads.Count == 0)
+            finally
             {
-                ShowBanner("No data rows found in the selected file.", isError: true);
-                return;
+                IsLoadingModalOpen = false;
             }
+        }
 
-            ShowBanner($"Uploading {leads.Count} leads for '{client.FullName}'…", isError: false);
+        private async Task ExecuteExportFileAsync(ClientFileModel? file)
+        {
+            if (file == null) return;
 
-            var (ok, msg, _) = await ApiService.Instance.UploadClientFileAsync(
-                client.Id, fileInfo.Name, sizeDisplay, leads);
+            var baseName = Path.GetFileNameWithoutExtension(file.FileName);
+            var isCsv = file.FileName.EndsWith(".csv", StringComparison.OrdinalIgnoreCase);
 
-            if (ok)
+            var sfd = new SaveFileDialog
             {
-                client.IsExpanded = true;
-                ShowBanner($"✓ {leads.Count} leads uploaded to '{client.FullName}' from '{fileInfo.Name}'.", isError: false);
-                await LoadClientsAsync(preserveBanner: true);
-                var updatedClient = Clients.FirstOrDefault(c => c.Id == client.Id);
-                if (updatedClient != null)
+                Title = $"Export Updated Leads for {file.ClientName}",
+                FileName = $"{baseName}_updated{(isCsv ? ".csv" : ".xlsx")}",
+                Filter = "Excel Workbook (*.xlsx)|*.xlsx|CSV File (*.csv)|*.csv",
+                FilterIndex = isCsv ? 2 : 1
+            };
+
+            if (sfd.ShowDialog() != true) return;
+
+            var savePath = sfd.FileName;
+            var isSaveCsv = savePath.EndsWith(".csv", StringComparison.OrdinalIgnoreCase);
+
+            _loadingCts?.Dispose();
+            _loadingCts = new System.Threading.CancellationTokenSource();
+            var ct = _loadingCts.Token;
+
+            LoadingModalTitle   = "Exporting Leads";
+            LoadingModalMessage = $"Fetching updated leads for '{file.FileName}'...";
+            LoadingModalDetail  = "Retrieving real-time dispositions, call counts, and agent notes...";
+            IsLoadingModalOpen  = true;
+
+            try
+            {
+                var (ok, msg, data) = await ApiService.Instance.GetClientFileLeadsAsync(file.Id, ct);
+                if (!ok || data?.Leads == null)
                 {
-                    updatedClient.IsExpanded = true;
-                    await LoadClientLeadsAsync(updatedClient);
+                    if (ct.IsCancellationRequested) return;
+                    ShowBanner($"Export failed: {msg}", isError: true);
+                    return;
                 }
+
+                var leads = data.Leads;
+                LoadingModalMessage = $"Writing {leads.Count:N0} records to '{Path.GetFileName(savePath)}'...";
+                LoadingModalDetail  = "Building formatted spreadsheet with updated CRM columns...";
+
+                await Task.Run(() =>
+                {
+                    var headers = new[]
+                    {
+                        "Call Date", "Call Disposition", "Assigned Agent", "Notes", "# Of Call",
+                        "Cell Number", "Business Name", "Title", "Contact Name", "Email",
+                        "Address", "City", "County", "State", "Zip Code", "Fax",
+                        "Annual Sales", "Number of Employees", "Website", "SIC Code",
+                        "SIC Description", "NAICS Code", "NAICS Description", "Status"
+                    };
+
+                    if (isSaveCsv)
+                    {
+                        using var writer = new StreamWriter(savePath, false, System.Text.Encoding.UTF8);
+                        string EscapeCsv(string? val)
+                        {
+                            if (val == null) return "";
+                            if (val.Contains(",") || val.Contains("\"") || val.Contains("\n") || val.Contains("\r"))
+                                return $"\"{val.Replace("\"", "\"\"")}\"";
+                            return val;
+                        }
+
+                        writer.WriteLine(string.Join(",", headers.Select(EscapeCsv)));
+                        foreach (var lead in leads)
+                        {
+                            ct.ThrowIfCancellationRequested();
+                            var rowVals = new[]
+                            {
+                                lead.CallDate, lead.CallDisposition, lead.AssignedAgent, lead.Notes, lead.CallCount.ToString(),
+                                lead.CellNumber, lead.BusinessName, lead.Title, lead.ContactName, lead.Email,
+                                lead.Address, lead.City, lead.County, lead.State, lead.ZipCode, lead.Fax,
+                                lead.AnnualSales, lead.NumberOfEmployees, lead.Website, lead.SicCode,
+                                lead.SicDescription, lead.NaicsCode, lead.NaicsDescription, lead.Status
+                            };
+                            writer.WriteLine(string.Join(",", rowVals.Select(EscapeCsv)));
+                        }
+                    }
+                    else
+                    {
+                        using var workbook = new XLWorkbook();
+                        var ws = workbook.Worksheets.Add("Updated Leads");
+
+                        for (int col = 0; col < headers.Length; col++)
+                        {
+                            var cell = ws.Cell(1, col + 1);
+                            cell.Value = headers[col];
+                            cell.Style.Font.Bold = true;
+                            cell.Style.Font.FontColor = XLColor.White;
+                            cell.Style.Fill.BackgroundColor = XLColor.FromHtml("#0F172A");
+                            cell.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                        }
+
+                        int row = 2;
+                        foreach (var lead in leads)
+                        {
+                            ct.ThrowIfCancellationRequested();
+                            ws.Cell(row, 1).SetValue(lead.CallDate ?? string.Empty);
+                            ws.Cell(row, 2).SetValue(lead.CallDisposition ?? string.Empty);
+                            ws.Cell(row, 3).SetValue(lead.AssignedAgent ?? string.Empty);
+                            ws.Cell(row, 4).SetValue(lead.Notes ?? string.Empty);
+                            ws.Cell(row, 5).SetValue(lead.CallCount);
+                            ws.Cell(row, 6).SetValue(lead.CellNumber ?? string.Empty);
+                            ws.Cell(row, 7).SetValue(lead.BusinessName ?? string.Empty);
+                            ws.Cell(row, 8).SetValue(lead.Title ?? string.Empty);
+                            ws.Cell(row, 9).SetValue(lead.ContactName ?? string.Empty);
+                            ws.Cell(row, 10).SetValue(lead.Email ?? string.Empty);
+                            ws.Cell(row, 11).SetValue(lead.Address ?? string.Empty);
+                            ws.Cell(row, 12).SetValue(lead.City ?? string.Empty);
+                            ws.Cell(row, 13).SetValue(lead.County ?? string.Empty);
+                            ws.Cell(row, 14).SetValue(lead.State ?? string.Empty);
+                            ws.Cell(row, 15).SetValue(lead.ZipCode ?? string.Empty);
+                            ws.Cell(row, 16).SetValue(lead.Fax ?? string.Empty);
+                            ws.Cell(row, 17).SetValue(lead.AnnualSales ?? string.Empty);
+                            ws.Cell(row, 18).SetValue(lead.NumberOfEmployees ?? string.Empty);
+                            ws.Cell(row, 19).SetValue(lead.Website ?? string.Empty);
+                            ws.Cell(row, 20).SetValue(lead.SicCode ?? string.Empty);
+                            ws.Cell(row, 21).SetValue(lead.SicDescription ?? string.Empty);
+                            ws.Cell(row, 22).SetValue(lead.NaicsCode ?? string.Empty);
+                            ws.Cell(row, 23).SetValue(lead.NaicsDescription ?? string.Empty);
+                            ws.Cell(row, 24).SetValue(lead.Status ?? string.Empty);
+                            row++;
+                        }
+
+                        ws.Columns().AdjustToContents();
+                        workbook.SaveAs(savePath);
+                    }
+                }, ct);
+
+                ShowBanner($"✓ Exported {leads.Count:N0} updated leads to '{Path.GetFileName(savePath)}'.", isError: false);
             }
-            else
+            catch (OperationCanceledException)
             {
-                ShowBanner($"Upload failed: {msg}", isError: true);
+                try { if (File.Exists(savePath)) File.Delete(savePath); } catch { }
+                ShowBanner("Export cancelled by user.", isError: false);
+            }
+            catch (Exception ex)
+            {
+                ShowBanner($"Export error: {ex.Message}", isError: true);
+            }
+            finally
+            {
+                IsLoadingModalOpen = false;
             }
         }
 
@@ -590,6 +825,9 @@ namespace LeadManagement.Desktop.ViewModels
             PreviewSearchText = string.Empty;
             _allPreviewLeads.Clear();
             FilteredPreviewLeads = new ObservableCollection<LeadModel>();
+
+            // Ensure Zoom is running in background while leads are being viewed
+            _ = Task.Run(() => ZoomPhoneService.EnsureZoomRunning());
 
             try
             {
@@ -656,6 +894,28 @@ namespace LeadManagement.Desktop.ViewModels
             PreviewSearchText = string.Empty;
             _allPreviewLeads.Clear();
             FilteredPreviewLeads = new ObservableCollection<LeadModel>();
+        }
+
+        private void ExecuteCallLead(LeadModel? lead)
+        {
+            if (lead == null) return;
+
+            if (string.IsNullOrWhiteSpace(lead.CellNumber))
+            {
+                ShowBanner("Please provide a phone number before calling.", isError: true);
+                return;
+            }
+
+            var (success, error) = ZoomPhoneService.Dial(lead.CellNumber);
+            if (!success)
+            {
+                ShowBanner(error ?? "Could not initiate call via Zoom.", isError: true);
+                return;
+            }
+
+            // Auto-increment the call count as recommended by manager
+            lead.CallCount++;
+            ShowBanner($"✓ Calling {lead.CellNumber} via Zoom Phone. Call count updated to {lead.CallCount}.", isError: false);
         }
 
         // ----------------------------------------------------------------
@@ -798,11 +1058,33 @@ namespace LeadManagement.Desktop.ViewModels
 
             int GetCol(params string[] aliases)
             {
-                for (int i = 0; i < headers.Count; i++)
-                    foreach (var a in aliases)
-                        if (headers[i].Equals(a, StringComparison.OrdinalIgnoreCase) ||
-                            headers[i].Contains(a, StringComparison.OrdinalIgnoreCase))
+                // Pass 1: Exact matches first
+                foreach (var a in aliases)
+                {
+                    for (int i = 0; i < headers.Count; i++)
+                    {
+                        if (string.Equals(headers[i], a, StringComparison.OrdinalIgnoreCase))
                             return i;
+                    }
+                }
+
+                // Pass 2: Substring matches (excluding generic collisions)
+                foreach (var a in aliases)
+                {
+                    // Generic words like "name" should not loosely match "business name"
+                    if (a.Equals("name", StringComparison.OrdinalIgnoreCase))
+                        continue;
+
+                    for (int i = 0; i < headers.Count; i++)
+                    {
+                        var h = headers[i];
+                        if (a.Contains("contact") && (h.Contains("business") || h.Contains("company")))
+                            continue;
+
+                        if (h.Contains(a, StringComparison.OrdinalIgnoreCase))
+                            return i;
+                    }
+                }
                 return -1;
             }
 
@@ -810,25 +1092,30 @@ namespace LeadManagement.Desktop.ViewModels
             int idxDisp     = GetCol("call disposition", "call composition", "disposition", "composition");
             int idxAgent    = GetCol("agent assigned", "assigned agent", "agent");
             int idxNotes    = GetCol("notes", "note");
-            int idxCalls    = GetCol("of cal", "# of cal", "call count", "number of call", "calls");
-            int idxBusiness = GetCol("business name","company","business");
-            int idxAddress  = GetCol("address","street");
+            int idxCalls    = GetCol("of cal", "# of cal", "# of call", "# of calls", "call count", "number of call", "calls");
+            int idxBusiness = GetCol("business name", "company name", "business", "company");
+            int idxAddress  = GetCol("address", "street");
             int idxCity     = GetCol("city");
             int idxCounty   = GetCol("county");
             int idxState    = GetCol("state");
-            int idxZip      = GetCol("zip code","zip","postal");
-            int idxCell     = GetCol("cell number","cell","phone","telephone","mobile");
-            int idxEmail    = GetCol("email","e-mail");
+            int idxZip      = GetCol("zip code", "zip", "postal");
+            int idxCell     = GetCol("cell number", "cell", "phone", "telephone", "mobile");
+            int idxEmail    = GetCol("email", "e-mail");
             int idxFax      = GetCol("fax");
-            int idxSales    = GetCol("annual sales","sales");
-            int idxEmp      = GetCol("number of employee","employees");
-            int idxTitle    = GetCol("title","job title");
-            int idxContact  = GetCol("contact name","contact","name");
-            int idxWeb      = GetCol("website","web","url","site");
-            int idxSicCode  = GetCol("sic code","sic");
-            int idxSicDesc  = GetCol("sic description","sic desc");
-            int idxNaics    = GetCol("naics code","naics");
-            int idxNaicsD   = GetCol("naics description","naics desc");
+            int idxSales    = GetCol("annual sales", "sales");
+            int idxEmp      = GetCol("number of employee", "employees", "number of employees");
+            int idxTitle    = GetCol("title", "job title");
+            int idxContact  = GetCol("contact name", "contact person", "contact", "contact_name", "full name", "person name", "contactname", "name");
+            int idxWeb      = GetCol("website", "web", "url", "site");
+            int idxSicCode  = GetCol("sic code", "sic");
+            int idxSicDesc  = GetCol("sic description", "sic desc");
+            int idxNaics    = GetCol("naics code", "naics");
+            int idxNaicsD   = GetCol("naics description", "naics desc");
+
+            if (idxContact == idxBusiness)
+            {
+                idxContact = -1;
+            }
 
             string SafeGet(string[] parts, int idx, int fallback, string def = "")
             {
@@ -838,16 +1125,39 @@ namespace LeadManagement.Desktop.ViewModels
                 return def;
             }
 
+            string CleanContactName(string raw)
+            {
+                if (string.IsNullOrWhiteSpace(raw)) return string.Empty;
+                var trimmed = raw.Trim();
+                if (trimmed.Equals("contact name", StringComparison.OrdinalIgnoreCase) ||
+                    trimmed.Equals("contact", StringComparison.OrdinalIgnoreCase) ||
+                    trimmed.Equals("contact_name", StringComparison.OrdinalIgnoreCase) ||
+                    trimmed.Equals("name", StringComparison.OrdinalIgnoreCase))
+                {
+                    return string.Empty;
+                }
+                return trimmed;
+            }
+
             int rowId = 1;
             foreach (var line in lines.Skip(1))
             {
                 if (string.IsNullOrWhiteSpace(line)) continue;
                 var parts = SplitCsvLine(line);
 
+                var bName = SafeGet(parts, idxBusiness, 0, "Unnamed Business");
+                if (bName.Equals("business name", StringComparison.OrdinalIgnoreCase) ||
+                    bName.Equals("business", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue; // Skip repeated header row
+                }
+
                 var rawDate = SafeGet(parts, idxDate, -1);
                 var dateVal = !string.IsNullOrWhiteSpace(rawDate) ? rawDate : string.Empty;
                 var rawCalls = SafeGet(parts, idxCalls, -1);
                 int callCount = int.TryParse(rawCalls, out var cc) && cc > 0 ? cc : 1;
+
+                var cName = CleanContactName(SafeGet(parts, idxContact, 11));
 
                 records.Add(new LeadModel
                 {
@@ -857,7 +1167,7 @@ namespace LeadManagement.Desktop.ViewModels
                     AssignedAgent    = SafeGet(parts, idxAgent, -1),
                     Notes            = SafeGet(parts, idxNotes, -1),
                     CallCount        = callCount,
-                    BusinessName     = SafeGet(parts, idxBusiness, 0, "Unnamed Business"),
+                    BusinessName     = bName,
                     Address          = SafeGet(parts, idxAddress,  1),
                     City             = SafeGet(parts, idxCity,     2),
                     County           = SafeGet(parts, idxCounty,   3),
@@ -869,7 +1179,7 @@ namespace LeadManagement.Desktop.ViewModels
                     AnnualSales      = SafeGet(parts, idxSales,    8, "Less than 500,000"),
                     NumberOfEmployees= SafeGet(parts, idxEmp,      9, "1 to 4"),
                     Title            = SafeGet(parts, idxTitle,   10),
-                    ContactName      = SafeGet(parts, idxContact, 11),
+                    ContactName      = cName,
                     Website          = SafeGet(parts, idxWeb,     12),
                     SicCode          = SafeGet(parts, idxSicCode, 13, "58120000"),
                     SicDescription   = SafeGet(parts, idxSicDesc, 14, "EATING PLACES"),
@@ -898,11 +1208,33 @@ namespace LeadManagement.Desktop.ViewModels
 
             int GetCol(params string[] aliases)
             {
-                for (int i = 0; i < headers.Count; i++)
-                    foreach (var a in aliases)
-                        if (headers[i].Equals(a, StringComparison.OrdinalIgnoreCase) ||
-                            headers[i].Contains(a, StringComparison.OrdinalIgnoreCase))
+                // Pass 1: Exact matches first
+                foreach (var a in aliases)
+                {
+                    for (int i = 0; i < headers.Count; i++)
+                    {
+                        if (string.Equals(headers[i], a, StringComparison.OrdinalIgnoreCase))
                             return i;
+                    }
+                }
+
+                // Pass 2: Substring matches (excluding generic collisions)
+                foreach (var a in aliases)
+                {
+                    // Generic words like "name" should not loosely match "business name"
+                    if (a.Equals("name", StringComparison.OrdinalIgnoreCase))
+                        continue;
+
+                    for (int i = 0; i < headers.Count; i++)
+                    {
+                        var h = headers[i];
+                        if (a.Contains("contact") && (h.Contains("business") || h.Contains("company")))
+                            continue;
+
+                        if (h.Contains(a, StringComparison.OrdinalIgnoreCase))
+                            return i;
+                    }
+                }
                 return -1;
             }
 
@@ -910,25 +1242,30 @@ namespace LeadManagement.Desktop.ViewModels
             int idxDisp     = GetCol("call disposition", "call composition", "disposition", "composition");
             int idxAgent    = GetCol("agent assigned", "assigned agent", "agent");
             int idxNotes    = GetCol("notes", "note");
-            int idxCalls    = GetCol("of cal", "# of cal", "call count", "number of call", "calls");
-            int idxBusiness = GetCol("business name","company","business");
-            int idxAddress  = GetCol("address","street");
+            int idxCalls    = GetCol("of cal", "# of cal", "# of call", "# of calls", "call count", "number of call", "calls");
+            int idxBusiness = GetCol("business name", "company name", "business", "company");
+            int idxAddress  = GetCol("address", "street");
             int idxCity     = GetCol("city");
             int idxCounty   = GetCol("county");
             int idxState    = GetCol("state");
-            int idxZip      = GetCol("zip code","zip","postal");
-            int idxCell     = GetCol("cell number","cell","phone","telephone","mobile");
-            int idxEmail    = GetCol("email","e-mail");
+            int idxZip      = GetCol("zip code", "zip", "postal");
+            int idxCell     = GetCol("cell number", "cell", "phone", "telephone", "mobile");
+            int idxEmail    = GetCol("email", "e-mail");
             int idxFax      = GetCol("fax");
-            int idxSales    = GetCol("annual sales","sales");
-            int idxEmp      = GetCol("number of employee","employees");
-            int idxTitle    = GetCol("title","job title");
-            int idxContact  = GetCol("contact name","contact","name");
-            int idxWeb      = GetCol("website","web","url","site");
-            int idxSicCode  = GetCol("sic code","sic");
-            int idxSicDesc  = GetCol("sic description","sic desc");
-            int idxNaics    = GetCol("naics code","naics");
-            int idxNaicsD   = GetCol("naics description","naics desc");
+            int idxSales    = GetCol("annual sales", "sales");
+            int idxEmp      = GetCol("number of employee", "employees", "number of employees");
+            int idxTitle    = GetCol("title", "job title");
+            int idxContact  = GetCol("contact name", "contact person", "contact", "contact_name", "full name", "person name", "contactname", "name");
+            int idxWeb      = GetCol("website", "web", "url", "site");
+            int idxSicCode  = GetCol("sic code", "sic");
+            int idxSicDesc  = GetCol("sic description", "sic desc");
+            int idxNaics    = GetCol("naics code", "naics");
+            int idxNaicsD   = GetCol("naics description", "naics desc");
+
+            if (idxContact == idxBusiness)
+            {
+                idxContact = -1;
+            }
 
             string SafeGet(string[] parts, int idx, int fallback, string def = "")
             {
@@ -936,6 +1273,20 @@ namespace LeadManagement.Desktop.ViewModels
                 if (t >= 0 && t < parts.Length)
                 { var v = parts[t].Trim(); return string.IsNullOrEmpty(v) ? def : v; }
                 return def;
+            }
+
+            string CleanContactName(string raw)
+            {
+                if (string.IsNullOrWhiteSpace(raw)) return string.Empty;
+                var trimmed = raw.Trim();
+                if (trimmed.Equals("contact name", StringComparison.OrdinalIgnoreCase) ||
+                    trimmed.Equals("contact", StringComparison.OrdinalIgnoreCase) ||
+                    trimmed.Equals("contact_name", StringComparison.OrdinalIgnoreCase) ||
+                    trimmed.Equals("name", StringComparison.OrdinalIgnoreCase))
+                {
+                    return string.Empty;
+                }
+                return trimmed;
             }
 
             int colCount = headers.Count;
@@ -955,10 +1306,18 @@ namespace LeadManagement.Desktop.ViewModels
 
                 if (parts.All(string.IsNullOrWhiteSpace)) continue;
 
+                var bName = SafeGet(parts, idxBusiness, 0, "Unnamed Business");
+                if (bName.Equals("business name", StringComparison.OrdinalIgnoreCase) ||
+                    bName.Equals("business", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue; // Skip repeated header row
+                }
+
                 var rawDate = SafeGet(parts, idxDate, -1);
                 var dateVal = !string.IsNullOrWhiteSpace(rawDate) ? rawDate : string.Empty;
                 var rawCalls = SafeGet(parts, idxCalls, -1);
                 int callCount = int.TryParse(rawCalls, out var cc) && cc > 0 ? cc : 1;
+                var cName = CleanContactName(SafeGet(parts, idxContact, 11));
 
                 records.Add(new LeadModel
                 {
@@ -968,7 +1327,7 @@ namespace LeadManagement.Desktop.ViewModels
                     AssignedAgent    = SafeGet(parts, idxAgent, -1),
                     Notes            = SafeGet(parts, idxNotes, -1),
                     CallCount        = callCount,
-                    BusinessName     = SafeGet(parts, idxBusiness, 0, "Unnamed Business"),
+                    BusinessName     = bName,
                     Address          = SafeGet(parts, idxAddress,  1),
                     City             = SafeGet(parts, idxCity,     2),
                     County           = SafeGet(parts, idxCounty,   3),
@@ -980,7 +1339,7 @@ namespace LeadManagement.Desktop.ViewModels
                     AnnualSales      = SafeGet(parts, idxSales,    8, "Less than 500,000"),
                     NumberOfEmployees= SafeGet(parts, idxEmp,      9, "1 to 4"),
                     Title            = SafeGet(parts, idxTitle,   10),
-                    ContactName      = SafeGet(parts, idxContact, 11),
+                    ContactName      = cName,
                     Website          = SafeGet(parts, idxWeb,     12),
                     SicCode          = SafeGet(parts, idxSicCode, 13, "58120000"),
                     SicDescription   = SafeGet(parts, idxSicDesc, 14, "EATING PLACES"),
