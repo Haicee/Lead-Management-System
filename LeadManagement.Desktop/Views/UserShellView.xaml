@@ -409,6 +409,7 @@
                                                         <ColumnDefinition Width="Auto"/> <!-- Expand arrow -->
                                                         <ColumnDefinition Width="Auto"/> <!-- Folder icon -->
                                                         <ColumnDefinition Width="*"/>    <!-- Client Name & Badges -->
+                                                        <ColumnDefinition Width="Auto"/> <!-- View Script Button (View-Only for Agents) -->
                                                     </Grid.ColumnDefinitions>
 
                                                     <!-- Expand Arrow Button -->
@@ -454,6 +455,17 @@
                                                             <TextBlock Text="👤 Assigned to you" FontSize="11" Foreground="#047857" FontWeight="SemiBold"/>
                                                         </Border>
                                                     </StackPanel>
+
+                                                    <!-- SCRIPT BUTTON (Agent View-Only) -->
+                                                    <Button Grid.Column="3"
+                                                            Command="{Binding DataContext.UserDashboard.ViewScriptCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                            CommandParameter="{Binding}"
+                                                            Visibility="{Binding HasScript, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                                            Style="{StaticResource SecondaryButtonStyle}"
+                                                            Padding="12,6" VerticalAlignment="Center" FontSize="12"
+                                                            ToolTip="{Binding ScriptName, StringFormat='View calling script: {0}'}">
+                                                        <TextBlock Text="📄 View Script"/>
+                                                    </Button>
                                                 </Grid>
                                             </Border>
 

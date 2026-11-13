@@ -193,6 +193,26 @@ try {
         $controller->assignAgents($clientId, $input);
     }
 
+    // Client Script Routes
+    elseif (preg_match('#^clients/(\d+)/script$#', $path, $matches)) {
+        require_once __DIR__ . '/controllers/ClientController.php';
+        $controller = new ClientController();
+        $clientId = (int)$matches[1];
+        if ($method === 'GET') {
+            $controller->getScript($clientId);
+        } elseif ($method === 'POST') {
+            $controller->saveScript($clientId, $input);
+        } elseif ($method === 'DELETE') {
+            $controller->deleteScript($clientId);
+        }
+    }
+
+    elseif (preg_match('#^clients/(\d+)/script/delete$#', $path, $matches) && $method === 'POST') {
+        require_once __DIR__ . '/controllers/ClientController.php';
+        $controller = new ClientController();
+        $controller->deleteScript((int)$matches[1]);
+    }
+
     elseif ((preg_match('#^clients/(\d+)$#', $path, $matches) && $method === 'DELETE') || ($path === 'clients/delete' && $method === 'POST')) {
         require_once __DIR__ . '/controllers/ClientController.php';
         $controller = new ClientController();

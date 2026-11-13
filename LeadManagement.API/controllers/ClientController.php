@@ -24,7 +24,7 @@ class ClientController
         $agentId = isset($_GET['agent_id']) ? (int)$_GET['agent_id'] : (isset($_GET['user_id']) ? (int)$_GET['user_id'] : null);
         if ($agentId && $agentId > 0) {
             $stmt = $this->db->prepare("
-                SELECT c.id, c.first_name, c.last_name, c.created_at, c.updated_at
+                SELECT c.id, c.first_name, c.last_name, c.script_name, c.script_size, c.script_type, c.script_updated_at, c.created_at, c.updated_at
                 FROM `clients` c
                 INNER JOIN `client_agents` ca ON c.id = ca.client_id
                 WHERE ca.user_id = ?
@@ -33,7 +33,7 @@ class ClientController
             $stmt->execute([$agentId]);
         } else {
             $stmt = $this->db->query("
-                SELECT id, first_name, last_name, created_at, updated_at
+                SELECT id, first_name, last_name, script_name, script_size, script_type, script_updated_at, created_at, updated_at
                 FROM `clients`
                 ORDER BY `id` DESC
             ");
@@ -44,6 +44,7 @@ class ClientController
         foreach ($clients as &$client) {
             $clientId = (int) $client['id'];
             $client['full_name'] = trim($client['first_name'] . ' ' . $client['last_name']);
+            $client['has_script'] = !empty($client['script_name']);
 
             // 1. Files uploaded for this client
             $stmtFiles = $this->db->prepare("
@@ -630,6 +631,118 @@ class ClientController
         $updatedLead = $fetchStmt->fetch();
 
         Response::success($updatedLead, 'Client lead updated successfully');
+    }
+
+    /**
+     * GET /clients/{id}/script
+     * 
+     * Retrieves the uploaded calling script for a specific client.
+     */
+    public function getScript(int $clientId): void
+    {
+        if ($clientId <= 0) {
+            Response::error('Invalid client ID.', 422);
+        }
+
+        $stmt = $this->db->prepare("
+            SELECT id, first_name, last_name, script_name, script_size, script_type, script_content, script_updated_at
+            FROM `clients`
+            WHERE id = ?
+        ");
+        $stmt->execute([$clientId]);
+        $client = $stmt->fetch();
+
+        if (!$client) {
+            Response::notFound('Client not found.');
+        }
+
+        Response::success([
+            'client_id'         => (int)$client['id'],
+            'client_name'       => trim($client['first_name'] . ' ' . $client['last_name']),
+            'script_name'       => $client['script_name'],
+            'script_size'       => $client['script_size'],
+            'script_type'       => $client['script_type'],
+            'script_content'    => $client['script_content'],
+            'script_updated_at' => $client['script_updated_at'],
+            'has_script'        => !empty($client['script_name'])
+        ], 'Script retrieved successfully.');
+    }
+
+    /**
+     * POST /clients/{id}/script
+     * 
+     * Uploads or updates the calling script for a specific client.
+     * Body: { "script_name": "...", "script_size": "...", "script_type": "...", "script_content": "..." }
+     */
+    public function saveScript(int $clientId, array $input): void
+    {
+        if ($clientId <= 0) {
+            Response::error('Invalid client ID.', 422);
+        }
+
+        $scriptName = trim($input['script_name'] ?? '');
+        $scriptSize = trim($input['script_size'] ?? '');
+        $scriptType = strtolower(trim($input['script_type'] ?? ''));
+        $scriptContent = $input['script_content'] ?? '';
+
+        if (empty($scriptName)) {
+            Response::error('Script name is required.', 422);
+        }
+
+        // Verify client exists
+        $stmtCheck = $this->db->prepare("SELECT id, first_name, last_name FROM `clients` WHERE id = ?");
+        $stmtCheck->execute([$clientId]);
+        $client = $stmtCheck->fetch();
+
+        if (!$client) {
+            Response::notFound('Client not found.');
+        }
+
+        $stmt = $this->db->prepare("
+            UPDATE `clients` 
+            SET `script_name` = ?, 
+                `script_size` = ?, 
+                `script_type` = ?, 
+                `script_content` = ?, 
+                `script_updated_at` = NOW()
+            WHERE id = ?
+        ");
+        $stmt->execute([$scriptName, $scriptSize, $scriptType, $scriptContent, $clientId]);
+
+        Response::success([
+            'client_id'         => $clientId,
+            'client_name'       => trim($client['first_name'] . ' ' . $client['last_name']),
+            'script_name'       => $scriptName,
+            'script_size'       => $scriptSize,
+            'script_type'       => $scriptType,
+            'script_updated_at' => date('Y-m-d H:i:s'),
+            'has_script'        => true
+        ], "Script '{$scriptName}' saved successfully for client.");
+    }
+
+    /**
+     * DELETE /clients/{id}/script
+     * 
+     * Removes the calling script for a specific client.
+     */
+    public function deleteScript(int $clientId): void
+    {
+        if ($clientId <= 0) {
+            Response::error('Invalid client ID.', 422);
+        }
+
+        $stmt = $this->db->prepare("
+            UPDATE `clients` 
+            SET `script_name` = NULL, 
+                `script_size` = NULL, 
+                `script_type` = NULL, 
+                `script_content` = NULL, 
+                `script_updated_at` = NULL
+            WHERE id = ?
+        ");
+        $stmt->execute([$clientId]);
+
+        Response::success(['client_id' => $clientId], 'Script removed successfully.');
     }
 }
 

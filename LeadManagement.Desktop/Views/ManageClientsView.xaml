@@ -933,6 +933,36 @@
 
                                         <!-- ACTION BUTTONS -->
                                         <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center">
+                                            <!-- SCRIPT AREA: When no script, show Upload Script. When uploaded, show View Script + Remove (✕) to minimize space -->
+                                            <!-- Case 1: No script -> Upload Script Button -->
+                                            <Button Command="{Binding DataContext.UploadScriptCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                    CommandParameter="{Binding}"
+                                                    Visibility="{Binding HasScript, Converter={StaticResource InverseBoolToVisibilityConverter}}"
+                                                    Style="{StaticResource SecondaryButtonStyle}"
+                                                    Padding="10,6" Margin="0,0,8,0" FontSize="12"
+                                                    ToolTip="Upload calling script for this client (.txt, .docx, .pdf, etc.)">
+                                                <TextBlock Text="📄 Upload Script"/>
+                                            </Button>
+
+                                            <!-- Case 2: Script uploaded -> View Script with Remove (✕) to minimize space -->
+                                            <StackPanel Orientation="Horizontal" Margin="0,0,8,0"
+                                                        Visibility="{Binding HasScript, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                                <Button Command="{Binding DataContext.PreviewScriptCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                        CommandParameter="{Binding}"
+                                                        Style="{StaticResource SecondaryButtonStyle}"
+                                                        Padding="10,6" FontSize="12"
+                                                        ToolTip="{Binding ScriptName, StringFormat='View/Preview script: {0}'}">
+                                                    <TextBlock Text="👁 View Script"/>
+                                                </Button>
+                                                <Button Command="{Binding DataContext.RemoveScriptCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                        CommandParameter="{Binding}"
+                                                        Style="{StaticResource DangerButtonStyle}"
+                                                        Padding="7,5" Margin="4,0,0,0" FontSize="11"
+                                                        ToolTip="Remove this client's script">
+                                                    <TextBlock Text="✕"/>
+                                                </Button>
+                                            </StackPanel>
+
                                             <!-- Upload file button -->
                                             <Button Command="{Binding DataContext.BrowseFileCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                     CommandParameter="{Binding}"

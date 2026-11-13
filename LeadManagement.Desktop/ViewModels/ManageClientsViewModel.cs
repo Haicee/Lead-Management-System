@@ -72,6 +72,16 @@ namespace LeadManagement.Desktop.ViewModels
         private string _loadingModalDetail = string.Empty;
         private System.Threading.CancellationTokenSource? _loadingCts;
 
+        // Script Preview State
+        private bool _isScriptPreviewOpen;
+        private ClientModel? _selectedScriptClient;
+        private string _selectedScriptTitle = string.Empty;
+        private string _selectedScriptName = string.Empty;
+        private string _selectedScriptSize = string.Empty;
+        private string _selectedScriptType = string.Empty;
+        private string _selectedScriptContent = string.Empty;
+        private bool _isScriptTextMode = true;
+
         // The full agent list (all role=user accounts) — loaded once
         private List<UserModel> _allAgents = new();
 
@@ -101,6 +111,14 @@ namespace LeadManagement.Desktop.ViewModels
             CallLeadCommand      = new RelayCommand<LeadModel>(ExecuteCallLead);
             CancelLoadingModalCommand = new RelayCommand(ExecuteCancelLoadingModal);
             ExportFileCommand    = new RelayCommand<ClientFileModel>(async f => await ExecuteExportFileAsync(f));
+
+            // Script Commands
+            UploadScriptCommand        = new RelayCommand<ClientModel>(async c => await ExecuteUploadScriptAsync(c));
+            PreviewScriptCommand       = new RelayCommand<ClientModel>(async c => await ExecutePreviewScriptAsync(c));
+            RemoveScriptCommand        = new RelayCommand<ClientModel>(async c => await ExecuteRemoveScriptAsync(c));
+            CloseScriptPreviewCommand  = new RelayCommand(() => IsScriptPreviewOpen = false);
+            CopyScriptTextCommand      = new RelayCommand(ExecuteCopyScriptText);
+            OpenScriptExternalCommand  = new RelayCommand(ExecuteOpenScriptExternal);
 
             // Pre-warm Zoom Workplace in background so click-to-dial opens instantaneously
             _ = Task.Run(() => ZoomPhoneService.EnsureZoomRunning());
@@ -258,6 +276,55 @@ namespace LeadManagement.Desktop.ViewModels
             set => SetProperty(ref _loadingModalDetail, value);
         }
 
+        // Script Preview Properties
+        public bool IsScriptPreviewOpen
+        {
+            get => _isScriptPreviewOpen;
+            set => SetProperty(ref _isScriptPreviewOpen, value);
+        }
+
+        public ClientModel? SelectedScriptClient
+        {
+            get => _selectedScriptClient;
+            set => SetProperty(ref _selectedScriptClient, value);
+        }
+
+        public string SelectedScriptTitle
+        {
+            get => _selectedScriptTitle;
+            set => SetProperty(ref _selectedScriptTitle, value);
+        }
+
+        public string SelectedScriptName
+        {
+            get => _selectedScriptName;
+            set => SetProperty(ref _selectedScriptName, value);
+        }
+
+        public string SelectedScriptSize
+        {
+            get => _selectedScriptSize;
+            set => SetProperty(ref _selectedScriptSize, value);
+        }
+
+        public string SelectedScriptType
+        {
+            get => _selectedScriptType;
+            set => SetProperty(ref _selectedScriptType, value);
+        }
+
+        public string SelectedScriptContent
+        {
+            get => _selectedScriptContent;
+            set => SetProperty(ref _selectedScriptContent, value);
+        }
+
+        public bool IsScriptTextMode
+        {
+            get => _isScriptTextMode;
+            set => SetProperty(ref _isScriptTextMode, value);
+        }
+
         // ----------------------------------------------------------------
         // Commands
         // ----------------------------------------------------------------
@@ -279,6 +346,12 @@ namespace LeadManagement.Desktop.ViewModels
         public ICommand CallLeadCommand { get; }
         public ICommand CancelLoadingModalCommand { get; }
         public ICommand ExportFileCommand { get; }
+        public ICommand UploadScriptCommand { get; }
+        public ICommand PreviewScriptCommand { get; }
+        public ICommand RemoveScriptCommand { get; }
+        public ICommand CloseScriptPreviewCommand { get; }
+        public ICommand CopyScriptTextCommand { get; }
+        public ICommand OpenScriptExternalCommand { get; }
 
         // ----------------------------------------------------------------
         // Agent selection helpers (called from the View code-behind)
@@ -772,6 +845,204 @@ namespace LeadManagement.Desktop.ViewModels
             finally
             {
                 IsLoadingModalOpen = false;
+            }
+        }
+
+        // ----------------------------------------------------------------
+        // Script Management Methods
+        // ----------------------------------------------------------------
+        private async Task ExecuteUploadScriptAsync(ClientModel? client)
+        {
+            if (client == null) return;
+
+            var dialog = new OpenFileDialog
+            {
+                Title = $"Select Calling Script for {client.FullName}",
+                Filter = "Script Documents (*.txt;*.pdf;*.docx;*.doc;*.rtf;*.md)|*.txt;*.pdf;*.docx;*.doc;*.rtf;*.md|Text Files (*.txt;*.md)|*.txt;*.md|PDF Documents (*.pdf)|*.pdf|Word Documents (*.docx;*.doc)|*.docx;*.doc|All Files (*.*)|*.*",
+                CheckFileExists = true
+            };
+
+            if (dialog.ShowDialog() != true) return;
+
+            string filePath = dialog.FileName;
+            string fileName = System.IO.Path.GetFileName(filePath);
+            string ext = System.IO.Path.GetExtension(filePath).ToLowerInvariant();
+
+            var fi = new System.IO.FileInfo(filePath);
+            if (fi.Length > 20 * 1024 * 1024)
+            {
+                ShowBanner("Selected file is too large. Script size must be under 20 MB.", isError: true);
+                return;
+            }
+
+            string fileSize = $"{fi.Length / 1024.0:F1} KB";
+            string scriptContent;
+            bool isText = ext == ".txt" || ext == ".md" || ext == ".rtf";
+
+            try
+            {
+                if (isText)
+                {
+                    scriptContent = await System.IO.File.ReadAllTextAsync(filePath);
+                }
+                else
+                {
+                    byte[] bytes = await System.IO.File.ReadAllBytesAsync(filePath);
+                    scriptContent = Convert.ToBase64String(bytes);
+                }
+            }
+            catch (Exception ex)
+            {
+                ShowBanner($"Failed to read script file: {ex.Message}", isError: true);
+                return;
+            }
+
+            IsLoading = true;
+            try
+            {
+                var (success, msg, data) = await ApiService.Instance.SaveClientScriptAsync(client.Id, fileName, fileSize, ext, scriptContent);
+                if (success)
+                {
+                    client.ScriptName = fileName;
+                    client.ScriptSize = fileSize;
+                    client.ScriptType = ext;
+                    client.ScriptContent = scriptContent;
+                    client.ScriptUpdatedAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+                    client.HasScript = true;
+
+                    ShowBanner($"✓ Calling script '{fileName}' uploaded successfully for client {client.FullName}.", isError: false);
+                }
+                else
+                {
+                    ShowBanner(msg, isError: true);
+                }
+            }
+            finally
+            {
+                IsLoading = false;
+            }
+        }
+
+        private async Task ExecutePreviewScriptAsync(ClientModel? client)
+        {
+            if (client == null) return;
+
+            // If content is not yet populated, fetch from API
+            if (string.IsNullOrEmpty(client.ScriptContent))
+            {
+                IsLoading = true;
+                try
+                {
+                    var (success, _, data) = await ApiService.Instance.GetClientScriptAsync(client.Id);
+                    if (success && data != null)
+                    {
+                        client.ScriptContent = data.ScriptContent;
+                    }
+                }
+                finally
+                {
+                    IsLoading = false;
+                }
+            }
+
+            // Open as independent, resizable Window
+            System.Windows.Application.Current.Dispatcher.Invoke(() =>
+            {
+                var win = new Views.ScriptViewerWindow(client, client.ScriptContent);
+                win.Show();
+            });
+        }
+
+        private async Task ExecuteRemoveScriptAsync(ClientModel? client)
+        {
+            if (client == null) return;
+
+            var result = System.Windows.MessageBox.Show(
+                $"Are you sure you want to remove the calling script '{client.ScriptName}' for client '{client.FullName}'?",
+                "Remove Script",
+                System.Windows.MessageBoxButton.YesNo,
+                System.Windows.MessageBoxImage.Question);
+
+            if (result != System.Windows.MessageBoxResult.Yes) return;
+
+            IsLoading = true;
+            try
+            {
+                var (success, msg) = await ApiService.Instance.DeleteClientScriptAsync(client.Id);
+                if (success)
+                {
+                    client.ScriptName = null;
+                    client.ScriptSize = null;
+                    client.ScriptType = null;
+                    client.ScriptContent = null;
+                    client.ScriptUpdatedAt = null;
+                    client.HasScript = false;
+
+                    if (IsScriptPreviewOpen && SelectedScriptClient?.Id == client.Id)
+                    {
+                        IsScriptPreviewOpen = false;
+                    }
+
+                    ShowBanner($"Calling script removed for client {client.FullName}.", isError: false);
+                }
+                else
+                {
+                    ShowBanner(msg, isError: true);
+                }
+            }
+            finally
+            {
+                IsLoading = false;
+            }
+        }
+
+        private void ExecuteCopyScriptText()
+        {
+            if (!string.IsNullOrEmpty(SelectedScriptContent))
+            {
+                if (IsScriptTextMode)
+                {
+                    System.Windows.Clipboard.SetText(SelectedScriptContent);
+                    ShowBanner("✓ Calling script copied to clipboard!", isError: false);
+                }
+                else
+                {
+                    ExecuteOpenScriptExternal();
+                }
+            }
+        }
+
+        private void ExecuteOpenScriptExternal()
+        {
+            if (SelectedScriptClient == null || string.IsNullOrEmpty(SelectedScriptContent)) return;
+
+            try
+            {
+                string fileName = SelectedScriptName;
+                if (string.IsNullOrWhiteSpace(fileName)) fileName = "Calling_Script.txt";
+
+                string tempFolder = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "LMS_Scripts");
+                System.IO.Directory.CreateDirectory(tempFolder);
+                string tempPath = System.IO.Path.Combine(tempFolder, fileName);
+
+                if (IsScriptTextMode)
+                {
+                    System.IO.File.WriteAllText(tempPath, SelectedScriptContent);
+                }
+                else
+                {
+                    byte[] bytes = Convert.FromBase64String(SelectedScriptContent);
+                    System.IO.File.WriteAllBytes(tempPath, bytes);
+                }
+
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(tempPath)
+                {
+                    UseShellExecute = true
+                });
+            }
+            catch (Exception ex)
+            {
+                ShowBanner($"Could not open document: {ex.Message}", isError: true);
             }
         }
 

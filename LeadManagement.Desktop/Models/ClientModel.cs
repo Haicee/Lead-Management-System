@@ -22,6 +22,12 @@ namespace LeadManagement.Desktop.Models
         private bool _isExpanded;
         private bool _isAssignDropdownOpen;
         private ObservableCollection<object> _agentSelectionItems = new();
+        private string? _scriptName;
+        private string? _scriptSize;
+        private string? _scriptType;
+        private string? _scriptUpdatedAt;
+        private string? _scriptContent;
+        private bool _hasScript;
 
         [JsonPropertyName("id")]
         public int Id
@@ -95,6 +101,103 @@ namespace LeadManagement.Desktop.Models
         {
             get => _assignedAgents;
             set => SetProperty(ref _assignedAgents, value);
+        }
+
+        [JsonPropertyName("script_name")]
+        public string? ScriptName
+        {
+            get => _scriptName;
+            set
+            {
+                if (SetProperty(ref _scriptName, value))
+                {
+                    OnPropertyChanged(nameof(HasScript));
+                    OnPropertyChanged(nameof(HasNoScript));
+                    OnPropertyChanged(nameof(ScriptDisplayInfo));
+                }
+            }
+        }
+
+        [JsonPropertyName("script_size")]
+        public string? ScriptSize
+        {
+            get => _scriptSize;
+            set
+            {
+                if (SetProperty(ref _scriptSize, value))
+                {
+                    OnPropertyChanged(nameof(ScriptDisplayInfo));
+                }
+            }
+        }
+
+        [JsonPropertyName("script_type")]
+        public string? ScriptType
+        {
+            get => _scriptType;
+            set => SetProperty(ref _scriptType, value);
+        }
+
+        [JsonPropertyName("script_updated_at")]
+        public string? ScriptUpdatedAt
+        {
+            get => _scriptUpdatedAt;
+            set
+            {
+                if (SetProperty(ref _scriptUpdatedAt, value))
+                {
+                    OnPropertyChanged(nameof(FormattedScriptUpdatedDate));
+                    OnPropertyChanged(nameof(ScriptDisplayInfo));
+                }
+            }
+        }
+
+        [JsonPropertyName("has_script")]
+        public bool HasScript
+        {
+            get => _hasScript || !string.IsNullOrWhiteSpace(_scriptName);
+            set
+            {
+                if (SetProperty(ref _hasScript, value))
+                {
+                    OnPropertyChanged(nameof(HasNoScript));
+                }
+            }
+        }
+
+        [JsonIgnore]
+        public bool HasNoScript => !HasScript;
+
+        [JsonPropertyName("script_content")]
+        public string? ScriptContent
+        {
+            get => _scriptContent;
+            set => SetProperty(ref _scriptContent, value);
+        }
+
+        [JsonIgnore]
+        public string FormattedScriptUpdatedDate
+        {
+            get
+            {
+                if (DateTime.TryParse(ScriptUpdatedAt, out var dt))
+                    return dt.ToString("MMM dd, yyyy");
+                return ScriptUpdatedAt ?? string.Empty;
+            }
+        }
+
+        [JsonIgnore]
+        public string ScriptDisplayInfo
+        {
+            get
+            {
+                if (!HasScript) return "No script uploaded";
+                var parts = new List<string>();
+                if (!string.IsNullOrEmpty(ScriptName)) parts.Add(ScriptName);
+                if (!string.IsNullOrEmpty(ScriptSize)) parts.Add(ScriptSize);
+                if (!string.IsNullOrEmpty(FormattedScriptUpdatedDate)) parts.Add(FormattedScriptUpdatedDate);
+                return string.Join(" • ", parts);
+            }
         }
 
         // Computed helpers
@@ -243,5 +346,35 @@ namespace LeadManagement.Desktop.Models
                 FilteredLeads = new ObservableCollection<LeadModel>(filtered);
             }
         }
+    }
+
+    /// <summary>
+    /// Payload returned when fetching or updating a client calling script.
+    /// </summary>
+    public class ClientScriptData
+    {
+        [JsonPropertyName("client_id")]
+        public int ClientId { get; set; }
+
+        [JsonPropertyName("client_name")]
+        public string ClientName { get; set; } = string.Empty;
+
+        [JsonPropertyName("script_name")]
+        public string? ScriptName { get; set; }
+
+        [JsonPropertyName("script_size")]
+        public string? ScriptSize { get; set; }
+
+        [JsonPropertyName("script_type")]
+        public string? ScriptType { get; set; }
+
+        [JsonPropertyName("script_content")]
+        public string? ScriptContent { get; set; }
+
+        [JsonPropertyName("script_updated_at")]
+        public string? ScriptUpdatedAt { get; set; }
+
+        [JsonPropertyName("has_script")]
+        public bool HasScript { get; set; }
     }
 }

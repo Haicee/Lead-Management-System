@@ -636,6 +636,61 @@ namespace LeadManagement.Desktop.Services
             catch (Exception ex) { return (false, $"Error updating lead: {ex.Message}", null); }
         }
 
+        /// <summary>Retrieves the script for a client via GET /clients/{id}/script.</summary>
+        public async Task<(bool Success, string Message, ClientScriptData? Script)> GetClientScriptAsync(int clientId)
+        {
+            try
+            {
+                var response = await _httpClient.GetAsync($"clients/{clientId}/script");
+                var responseBody = await response.Content.ReadAsStringAsync();
+                var result = JsonSerializer.Deserialize<ApiResponse<ClientScriptData>>(responseBody);
+                if (result == null) return (false, "Unable to parse server response.", null);
+                return (result.Success, result.Message, result.Data);
+            }
+            catch (HttpRequestException) { return (false, "Cannot connect to server. Please ensure XAMPP Apache & MySQL are running.", null); }
+            catch (Exception ex) { return (false, $"Error fetching script: {ex.Message}", null); }
+        }
+
+        /// <summary>Saves or updates a client script via POST /clients/{id}/script.</summary>
+        public async Task<(bool Success, string Message, ClientScriptData? Script)> SaveClientScriptAsync(
+            int clientId, string scriptName, string scriptSize, string scriptType, string scriptContent)
+        {
+            try
+            {
+                var payload = new
+                {
+                    script_name = scriptName,
+                    script_size = scriptSize,
+                    script_type = scriptType,
+                    script_content = scriptContent
+                };
+                var json = JsonSerializer.Serialize(payload);
+                var content = new StringContent(json, Encoding.UTF8, "application/json");
+                var response = await _httpClient.PostAsync($"clients/{clientId}/script", content);
+                var responseBody = await response.Content.ReadAsStringAsync();
+                var result = JsonSerializer.Deserialize<ApiResponse<ClientScriptData>>(responseBody);
+                if (result == null) return (false, "Unable to parse server response.", null);
+                return (result.Success, result.Message, result.Data);
+            }
+            catch (HttpRequestException) { return (false, "Cannot connect to server. Please ensure XAMPP Apache & MySQL are running.", null); }
+            catch (Exception ex) { return (false, $"Error saving script: {ex.Message}", null); }
+        }
+
+        /// <summary>Deletes a client script via DELETE /clients/{id}/script or POST /clients/{id}/script/delete.</summary>
+        public async Task<(bool Success, string Message)> DeleteClientScriptAsync(int clientId)
+        {
+            try
+            {
+                var response = await _httpClient.PostAsync($"clients/{clientId}/script/delete", new StringContent("{}", Encoding.UTF8, "application/json"));
+                var responseBody = await response.Content.ReadAsStringAsync();
+                var result = JsonSerializer.Deserialize<ApiResponse<object>>(responseBody);
+                if (result == null) return (false, "Unable to parse server response.");
+                return (result.Success, result.Message);
+            }
+            catch (HttpRequestException) { return (false, "Cannot connect to server. Please ensure XAMPP Apache & MySQL are running."); }
+            catch (Exception ex) { return (false, $"Error removing script: {ex.Message}"); }
+        }
+
         /// <summary>Deletes a client and all associated data via POST /clients/delete.</summary>
         public async Task<(bool Success, string Message)> DeleteClientAsync(int clientId)
         {
