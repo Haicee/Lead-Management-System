@@ -74,6 +74,20 @@ try {
         $controller->store($input);
     }
 
+    elseif ((preg_match('#^users/(\d+)$#', $path, $matches) && ($method === 'PUT' || $method === 'POST')) || ($path === 'users/update' && $method === 'POST')) {
+        require_once __DIR__ . '/controllers/UserController.php';
+        $controller = new UserController();
+        $id = !empty($matches[1]) ? (int) $matches[1] : (int) ($input['id'] ?? 0);
+        $controller->update($id, $input);
+    }
+
+    elseif ((preg_match('#^users/(\d+)$#', $path, $matches) && $method === 'DELETE') || (preg_match('#^users/(\d+)/delete$#', $path, $matches) && $method === 'POST') || ($path === 'users/delete' && $method === 'POST')) {
+        require_once __DIR__ . '/controllers/UserController.php';
+        $controller = new UserController();
+        $id = !empty($matches[1]) ? (int) $matches[1] : (int) ($input['id'] ?? 0);
+        $controller->destroy($id);
+    }
+
     // Lead Routes
     elseif ($path === 'leads/import' && $method === 'POST') {
         require_once __DIR__ . '/controllers/LeadController.php';

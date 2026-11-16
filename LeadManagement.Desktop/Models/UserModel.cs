@@ -33,7 +33,7 @@ namespace LeadManagement.Desktop.Models
         public bool IsAdmin => Role?.Equals("admin", StringComparison.OrdinalIgnoreCase) == true;
 
         [JsonIgnore]
-        public string RoleDisplay => IsAdmin ? "Administrator" : "Standard User (Agent)";
+        public string RoleDisplay => IsAdmin ? "Administrator" : "User (Agent)";
 
         [JsonIgnore]
         public string StatusDisplay => IsActive == 1 ? "Active" : "Inactive";

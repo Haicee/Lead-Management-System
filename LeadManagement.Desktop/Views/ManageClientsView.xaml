@@ -910,7 +910,7 @@
                                                 </StackPanel>
                                             </Border>
 
-                                            <!-- Assigned agents chips -->
+                                            <!-- Assigned agents chips 
                                             <ItemsControl ItemsSource="{Binding AssignedAgents}" Margin="6,0,0,0" VerticalAlignment="Center">
                                                 <ItemsControl.ItemsPanel>
                                                     <ItemsPanelTemplate>
@@ -929,6 +929,7 @@
                                                     </DataTemplate>
                                                 </ItemsControl.ItemTemplate>
                                             </ItemsControl>
+                                            -->
                                         </WrapPanel>
 
                                         <!-- ACTION BUTTONS -->

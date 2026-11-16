@@ -487,6 +487,89 @@ namespace LeadManagement.Desktop.Services
             }
         }
 
+        /// <summary>
+        /// Updates an existing user account via POST /users/update.
+        /// </summary>
+        public async Task<(bool Success, string Message, UserModel? User)> UpdateUserAsync(
+            int id,
+            string username,
+            string fullName,
+            string email,
+            string role,
+            int isActive,
+            string? newPassword = null)
+        {
+            try
+            {
+                var payload = new
+                {
+                    id = id,
+                    username = username.Trim(),
+                    full_name = fullName.Trim(),
+                    email = email.Trim(),
+                    role = role.Trim().ToLowerInvariant(),
+                    is_active = isActive,
+                    password = string.IsNullOrWhiteSpace(newPassword) ? null : newPassword
+                };
+
+                var json = JsonSerializer.Serialize(payload);
+                var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+                var response = await _httpClient.PostAsync("users/update", content);
+                var responseBody = await response.Content.ReadAsStringAsync();
+
+                var result = JsonSerializer.Deserialize<ApiResponse<UserModel>>(responseBody);
+
+                if (result == null)
+                {
+                    return (false, "Unable to parse server response.", null);
+                }
+
+                return (result.Success, result.Message, result.Data);
+            }
+            catch (HttpRequestException)
+            {
+                return (false, "Cannot connect to server. Please ensure XAMPP Apache & MySQL are running.", null);
+            }
+            catch (Exception ex)
+            {
+                return (false, $"Error updating user: {ex.Message}", null);
+            }
+        }
+
+        /// <summary>
+        /// Deletes a user account via POST /users/delete.
+        /// </summary>
+        public async Task<(bool Success, string Message)> DeleteUserAsync(int userId)
+        {
+            try
+            {
+                var payload = new { id = userId };
+                var json = JsonSerializer.Serialize(payload);
+                var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+                var response = await _httpClient.PostAsync("users/delete", content);
+                var responseBody = await response.Content.ReadAsStringAsync();
+
+                var result = JsonSerializer.Deserialize<ApiResponse<object>>(responseBody);
+
+                if (result == null)
+                {
+                    return (false, "Unable to parse server response.");
+                }
+
+                return (result.Success, result.Message);
+            }
+            catch (HttpRequestException)
+            {
+                return (false, "Cannot connect to server. Please ensure XAMPP Apache & MySQL are running.");
+            }
+            catch (Exception ex)
+            {
+                return (false, $"Error deleting user: {ex.Message}");
+            }
+        }
+
         // =========================================================
         // CLIENT MANAGEMENT METHODS
         // =========================================================

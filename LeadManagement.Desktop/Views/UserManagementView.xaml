@@ -9,9 +9,9 @@
              d:DesignHeight="850" d:DesignWidth="1200"
              FontFamily="{StaticResource AppFontFamily}">
 
-    <Grid Margin="24,20,24,20">
+    <Grid Margin="0" Background="Transparent">
         <!-- BASE VIEWPORT -->
-        <Grid>
+        <Grid Margin="24,20,24,20">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" /> <!-- Header & Quick Actions -->
                 <RowDefinition Height="Auto" /> <!-- Status / Success Banner -->
@@ -187,10 +187,45 @@
                         <DataGridTemplateColumn Header="STATUS" Width="120" CanUserSort="True" SortMemberPath="IsActive">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
-                                    <Border Background="#ECFDF5" BorderBrush="#A7F3D0" BorderThickness="1" CornerRadius="10" Padding="8,3" HorizontalAlignment="Left" VerticalAlignment="Center">
+                                    <Border CornerRadius="10" Padding="8,3" BorderThickness="1" HorizontalAlignment="Left" VerticalAlignment="Center">
+                                        <Border.Style>
+                                            <Style TargetType="Border">
+                                                <Setter Property="Background" Value="#ECFDF5"/>
+                                                <Setter Property="BorderBrush" Value="#A7F3D0"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsActive}" Value="0">
+                                                        <Setter Property="Background" Value="#FEF2F2"/>
+                                                        <Setter Property="BorderBrush" Value="#FECACA"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Border.Style>
                                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                            <TextBlock Text="● " Foreground="#059669" FontSize="10" VerticalAlignment="Center" />
-                                            <TextBlock Text="{Binding StatusDisplay}" FontSize="11" FontWeight="SemiBold" Foreground="#065F46" VerticalAlignment="Center" />
+                                            <TextBlock FontSize="10" VerticalAlignment="Center">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Text" Value="● "/>
+                                                        <Setter Property="Foreground" Value="#059669"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsActive}" Value="0">
+                                                                <Setter Property="Foreground" Value="#DC2626"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                            <TextBlock Text="{Binding StatusDisplay}" FontSize="11" FontWeight="SemiBold">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Foreground" Value="#065F46"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsActive}" Value="0">
+                                                                <Setter Property="Foreground" Value="#991B1B"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
                                         </StackPanel>
                                     </Border>
                                 </DataTemplate>
@@ -198,7 +233,7 @@
                         </DataGridTemplateColumn>
 
                         <!-- Last Login Date -->
-                        <DataGridTemplateColumn Header="LAST LOGIN" Width="180" CanUserSort="True" SortMemberPath="LastLoginAt">
+                        <DataGridTemplateColumn Header="LAST LOGIN" Width="160" CanUserSort="True" SortMemberPath="LastLoginAt">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
                                     <TextBlock Text="{Binding FormattedLastLogin}" FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center" />
@@ -207,10 +242,93 @@
                         </DataGridTemplateColumn>
 
                         <!-- Created Date -->
-                        <DataGridTemplateColumn Header="REGISTERED ON" Width="140" CanUserSort="True" SortMemberPath="CreatedAt">
+                        <DataGridTemplateColumn Header="REGISTERED ON" Width="130" CanUserSort="True" SortMemberPath="CreatedAt">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
                                     <TextBlock Text="{Binding FormattedCreatedDate}" FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+
+                        <!-- ACTIONS Column -->
+                        <DataGridTemplateColumn Header="ACTIONS" Width="160" CanUserResize="False">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Left" Margin="4,0">
+                                        <!-- Edit Button -->
+                                        <Button Padding="10,5"
+                                                Margin="0,0,6,0"
+                                                Cursor="Hand"
+                                                FontSize="11"
+                                                FontWeight="SemiBold"
+                                                ToolTip="Edit this user account"
+                                                Command="{Binding DataContext.OpenEditUserModalCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                                CommandParameter="{Binding}">
+                                            <Button.Style>
+                                                <Style TargetType="Button">
+                                                    <Setter Property="Background" Value="#EFF6FF"/>
+                                                    <Setter Property="BorderBrush" Value="#BFDBFE"/>
+                                                    <Setter Property="Foreground" Value="#1D4ED8"/>
+                                                    <Setter Property="BorderThickness" Value="1"/>
+                                                    <Setter Property="Template">
+                                                        <Setter.Value>
+                                                            <ControlTemplate TargetType="Button">
+                                                                <Border Background="{TemplateBinding Background}"
+                                                                        BorderBrush="{TemplateBinding BorderBrush}"
+                                                                        BorderThickness="{TemplateBinding BorderThickness}"
+                                                                        CornerRadius="6"
+                                                                        Padding="{TemplateBinding Padding}">
+                                                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                                </Border>
+                                                                <ControlTemplate.Triggers>
+                                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                                        <Setter Property="Background" Value="#DBEAFE"/>
+                                                                    </Trigger>
+                                                                </ControlTemplate.Triggers>
+                                                            </ControlTemplate>
+                                                        </Setter.Value>
+                                                    </Setter>
+                                                </Style>
+                                            </Button.Style>
+                                            <TextBlock Text="✏ Edit"/>
+                                        </Button>
+                                        <!-- Delete Button -->
+                                        <Button Padding="10,5"
+                                                Cursor="Hand"
+                                                FontSize="11"
+                                                FontWeight="SemiBold"
+                                                ToolTip="Delete this user account"
+                                                Command="{Binding DataContext.DeleteUserCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                                CommandParameter="{Binding}">
+                                            <Button.Style>
+                                                <Style TargetType="Button">
+                                                    <Setter Property="Background" Value="#FEF2F2"/>
+                                                    <Setter Property="BorderBrush" Value="#FECACA"/>
+                                                    <Setter Property="Foreground" Value="#DC2626"/>
+                                                    <Setter Property="BorderThickness" Value="1"/>
+                                                    <Setter Property="Template">
+                                                        <Setter.Value>
+                                                            <ControlTemplate TargetType="Button">
+                                                                <Border Background="{TemplateBinding Background}"
+                                                                        BorderBrush="{TemplateBinding BorderBrush}"
+                                                                        BorderThickness="{TemplateBinding BorderThickness}"
+                                                                        CornerRadius="6"
+                                                                        Padding="{TemplateBinding Padding}">
+                                                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                                </Border>
+                                                                <ControlTemplate.Triggers>
+                                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                                        <Setter Property="Background" Value="#FEE2E2"/>
+                                                                    </Trigger>
+                                                                </ControlTemplate.Triggers>
+                                                            </ControlTemplate>
+                                                        </Setter.Value>
+                                                    </Setter>
+                                                </Style>
+                                            </Button.Style>
+                                            <TextBlock Text="🗑 Delete"/>
+                                        </Button>
+                                    </StackPanel>
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
@@ -330,6 +448,152 @@
                 </StackPanel>
             </Border>
         </Grid>
+        <!-- ============================================================== -->
+        <!-- EDIT USER MODAL OVERLAY                                        -->
+        <!-- ============================================================== -->
+        <Grid Visibility="{Binding IsEditUserModalOpen, Converter={StaticResource BooleanToVisibilityConverter}}"
+              Panel.ZIndex="200">
+            <!-- Dark Backdrop -->
+            <Border Background="#99000000" />
+
+            <!-- Modal Content Card -->
+            <Border Width="500"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Style="{StaticResource CardBorderStyle}"
+                    Padding="28"
+                    Background="White">
+                <StackPanel>
+                    <!-- Header -->
+                    <Grid Margin="0,0,0,18">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+
+                        <StackPanel Grid.Column="0">
+                            <TextBlock Text="Edit User Account" FontSize="18" FontWeight="Bold" Foreground="{StaticResource TextPrimaryBrush}" />
+                            <TextBlock Text="{Binding EditModalSubtitle}" FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,3,0,0" />
+                        </StackPanel>
+
+                        <Button Grid.Column="1"
+                                Content="✕"
+                                Command="{Binding CloseEditUserModalCommand}"
+                                Background="Transparent"
+                                BorderBrush="Transparent"
+                                Foreground="#64748B"
+                                FontSize="14"
+                                FontWeight="Bold"
+                                Cursor="Hand"
+                                VerticalAlignment="Top" />
+                    </Grid>
+
+                    <!-- Error Banner -->
+                    <Border Background="#FEF2F2"
+                            BorderBrush="#FECACA"
+                            BorderThickness="1"
+                            CornerRadius="6"
+                            Padding="12,8"
+                            Margin="0,0,0,16"
+                            Visibility="{Binding HasEditFormError, Converter={StaticResource BooleanToVisibilityConverter}}">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="⚠" FontSize="13" Foreground="#DC2626" Margin="0,0,8,0" VerticalAlignment="Center" />
+                            <TextBlock Text="{Binding EditFormErrorMessage}" FontSize="12" Foreground="#DC2626" TextWrapping="Wrap" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Two-column layout for fields -->
+                    <Grid Margin="0,0,0,14">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="12" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+
+                        <!-- Full Name -->
+                        <StackPanel Grid.Column="0">
+                            <TextBlock Text="Full Name" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,5" />
+                            <TextBox Text="{Binding EditFullName, UpdateSourceTrigger=PropertyChanged}"
+                                     Style="{StaticResource ModernTextBoxStyle}" />
+                        </StackPanel>
+
+                        <!-- Username -->
+                        <StackPanel Grid.Column="2">
+                            <TextBlock Text="Username" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,5" />
+                            <TextBox Text="{Binding EditUsername, UpdateSourceTrigger=PropertyChanged}"
+                                     Style="{StaticResource ModernTextBoxStyle}" />
+                        </StackPanel>
+                    </Grid>
+
+                    <!-- Email -->
+                    <TextBlock Text="Email Address (Optional)" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,5" />
+                    <TextBox Text="{Binding EditEmail, UpdateSourceTrigger=PropertyChanged}"
+                             Style="{StaticResource ModernTextBoxStyle}"
+                             Margin="0,0,0,14" />
+
+                    <!-- Two-column: Role + Status -->
+                    <Grid Margin="0,0,0,14">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="12" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+
+                        <!-- Role -->
+                        <StackPanel Grid.Column="0">
+                            <TextBlock Text="Account Role" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,5" />
+                            <ComboBox ItemsSource="{Binding AvailableRoles}"
+                                      SelectedItem="{Binding EditRole}"
+                                      Style="{StaticResource ModernComboBoxStyle}"
+                                      Height="40" />
+                        </StackPanel>
+
+                        <!-- Status -->
+                        <StackPanel Grid.Column="2">
+                            <TextBlock Text="Account Status" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,5" />
+                            <ComboBox ItemsSource="{Binding AvailableStatuses}"
+                                      SelectedItem="{Binding EditStatusDisplay}"
+                                      Style="{StaticResource ModernComboBoxStyle}"
+                                      Height="40" />
+                        </StackPanel>
+                    </Grid>
+
+                    <!-- New Password (optional) -->
+                    <Border Background="#F8FAFC" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="6" Padding="12,10" Margin="0,0,0,20">
+                        <StackPanel>
+                            <TextBlock FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,5">
+                                <Run Text="New Password"/>
+                                <Run Text=" (leave blank to keep current)" Foreground="#94A3B8" FontWeight="Normal"/>
+                            </TextBlock>
+                            <TextBox Text="{Binding EditPassword, UpdateSourceTrigger=PropertyChanged}"
+                                     Style="{StaticResource ModernTextBoxStyle}" />
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Modal Actions -->
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+
+                        <Button Grid.Column="1"
+                                Content="Cancel"
+                                Command="{Binding CloseEditUserModalCommand}"
+                                Style="{StaticResource SecondaryButtonStyle}"
+                                Padding="16,9"
+                                Margin="0,0,10,0" />
+
+                        <Button Grid.Column="2"
+                                Content="{Binding UpdateButtonText}"
+                                Command="{Binding UpdateUserCommand}"
+                                Style="{StaticResource PrimaryButtonStyle}"
+                                Padding="20,9" />
+                    </Grid>
+                </StackPanel>
+            </Border>
+        </Grid>
+
     </Grid>
 </UserControl>
-

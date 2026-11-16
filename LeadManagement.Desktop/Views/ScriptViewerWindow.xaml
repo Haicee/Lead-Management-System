@@ -13,10 +13,14 @@
 
     <Grid>
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/> <!-- Header -->
-            <RowDefinition Height="Auto"/> <!-- Toolbar (Font controls, Copy, Pin, Search) -->
-            <RowDefinition Height="*"/>    <!-- Script Content -->
-            <RowDefinition Height="Auto"/> <!-- Status Footer -->
+            <RowDefinition Height="Auto"/>
+            <!-- Header -->
+            <RowDefinition Height="Auto"/>
+            <!-- Toolbar (Font controls, Copy, Pin, Search) -->
+            <RowDefinition Height="*"/>
+            <!-- Script Content -->
+            <RowDefinition Height="Auto"/>
+            <!-- Status Footer -->
         </Grid.RowDefinitions>
 
         <!-- 1. HEADER -->
@@ -45,7 +49,7 @@
 
                 <!-- Window Actions -->
                 <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-                    <ToggleButton x:Name="BtnPinTop" Content="📌 Pin on Top"
+                    <ToggleButton x:Name="BtnPinTop" Content="📌 Pin"
                                   Checked="BtnPinTop_Checked" Unchecked="BtnPinTop_Unchecked"
                                   Background="#1E293B" Foreground="#E2E8F0" BorderBrush="#334155"
                                   Padding="10,6" Margin="0,0,8,0" Cursor="Hand" FontSize="12">
@@ -80,10 +84,14 @@
         <Border Grid.Row="1" Background="White" BorderBrush="#E2E8F0" BorderThickness="0,0,0,1" Padding="16,10">
             <Grid>
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto"/> <!-- Font Controls -->
-                    <ColumnDefinition Width="Auto"/> <!-- Search Box -->
-                    <ColumnDefinition Width="*"/>    <!-- Spacing -->
-                    <ColumnDefinition Width="Auto"/> <!-- Action Buttons -->
+                    <ColumnDefinition Width="Auto"/>
+                    <!-- Font Controls -->
+                    <ColumnDefinition Width="Auto"/>
+                    <!-- Search Box -->
+                    <ColumnDefinition Width="*"/>
+                    <!-- Spacing -->
+                    <ColumnDefinition Width="Auto"/>
+                    <!-- Action Buttons -->
                 </Grid.ColumnDefinitions>
 
                 <!-- Font size controls -->
@@ -97,7 +105,7 @@
                 </StackPanel>
 
                 <!-- Quick Find -->
-                <Border Grid.Column="1" Background="#F8FAFC" BorderBrush="#CBD5E1" BorderThickness="1" CornerRadius="6" Padding="6,2" VerticalAlignment="Center" Width="200">
+                <Border Background="#F8FAFC" BorderBrush="#CBD5E1" BorderThickness="1" CornerRadius="6" Padding="6,2" VerticalAlignment="Center" Margin="344,0,0,0" Grid.Column="2">
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto"/>
@@ -113,15 +121,7 @@
                     </Grid>
                 </Border>
 
-                <!-- Action buttons -->
-                <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center">
-                    <Button Click="BtnCopy_Click" Style="{StaticResource SecondaryButtonStyle}" Padding="12,6" Margin="0,0,8,0" FontSize="12" ToolTip="Copy script text to clipboard">
-                        <TextBlock Text="📋 Copy Script"/>
-                    </Button>
-                    <Button Click="BtnOpenExternal_Click" Style="{StaticResource SecondaryButtonStyle}" Padding="12,6" FontSize="12" ToolTip="Open in Word / Acrobat / Notepad if installed">
-                        <TextBlock Text="📂 Open with App"/>
-                    </Button>
-                </StackPanel>
+
             </Grid>
         </Border>
 
