@@ -541,7 +541,7 @@ namespace LeadManagement.Desktop.ViewModels
             if (token.IsCancellationRequested) return null;
             progress?.Report((0, 0, 0, "Reading CSV lines..."));
 
-            var lines = File.ReadAllLines(path);
+            var lines = LeadColumnMatcher.ReadAllLinesShared(path);
             if (lines.Length <= 1)
             {
                 throw new InvalidOperationException("The CSV file is empty or only contains a header.");
@@ -588,7 +588,7 @@ namespace LeadManagement.Desktop.ViewModels
             if (token.IsCancellationRequested) return null;
             progress?.Report((0, 0, 0, "Opening Excel workbook..."));
 
-            using var workbook = new XLWorkbook(path);
+            using var workbook = LeadColumnMatcher.OpenWorkbookShared(path);
             var worksheet = workbook.Worksheets.First();
 
             var usedRange = worksheet.RangeUsed();

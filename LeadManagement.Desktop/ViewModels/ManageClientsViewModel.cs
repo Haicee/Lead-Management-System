@@ -1321,7 +1321,7 @@ namespace LeadManagement.Desktop.ViewModels
         private static List<LeadModel> ParseCsvFile(string path)
         {
             var records = new List<LeadModel>();
-            var lines   = File.ReadAllLines(path);
+            var lines   = LeadColumnMatcher.ReadAllLinesShared(path);
             if (lines.Length <= 1) return records;
 
             var rawHeaders = SplitCsvLine(lines[0]).Select(h => h.Trim()).ToList();
@@ -1367,7 +1367,7 @@ namespace LeadManagement.Desktop.ViewModels
         private static List<LeadModel> ParseExcelFile(string path)
         {
             var records = new List<LeadModel>();
-            using var workbook   = new XLWorkbook(path);
+            using var workbook   = LeadColumnMatcher.OpenWorkbookShared(path);
             var worksheet        = workbook.Worksheets.First();
             var usedRange        = worksheet.RangeUsed();
             if (usedRange == null) return records;

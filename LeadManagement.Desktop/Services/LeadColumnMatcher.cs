@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
+using ClosedXML.Excel;
 using LeadManagement.Desktop.Models;
 
 namespace LeadManagement.Desktop.Services
@@ -481,6 +483,54 @@ namespace LeadManagement.Desktop.Services
                 NaicsDescription  = naicsDesc,
                 Status            = statusVal
             };
+        }
+
+        /// <summary>
+        /// Reads all lines from a CSV or text file with FileShare.ReadWrite enabled.
+        /// This allows the file to be read even if it is currently open in Microsoft Excel or another program.
+        /// </summary>
+        public static string[] ReadAllLinesShared(string path)
+        {
+            try
+            {
+                using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                using var reader = new StreamReader(fs, System.Text.Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
+                var lines = new List<string>();
+                string? line;
+                while ((line = reader.ReadLine()) != null)
+                {
+                    lines.Add(line);
+                }
+                return lines.ToArray();
+            }
+            catch (IOException ex) when (ex.Message.Contains("used by another process", StringComparison.OrdinalIgnoreCase) ||
+                                       ex.Message.Contains("being used", StringComparison.OrdinalIgnoreCase))
+            {
+                var fileName = Path.GetFileName(path);
+                throw new IOException($"The file '{fileName}' is currently open and locked by another application. Please save and close the file, then try again.", ex);
+            }
+        }
+
+        /// <summary>
+        /// Loads an Excel workbook (.xlsx/.xls) into memory with FileShare.ReadWrite enabled.
+        /// This allows the file to be parsed even if it is currently open in Microsoft Excel.
+        /// </summary>
+        public static XLWorkbook OpenWorkbookShared(string path)
+        {
+            try
+            {
+                using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                var ms = new MemoryStream();
+                fs.CopyTo(ms);
+                ms.Position = 0;
+                return new XLWorkbook(ms);
+            }
+            catch (IOException ex) when (ex.Message.Contains("used by another process", StringComparison.OrdinalIgnoreCase) ||
+                                       ex.Message.Contains("being used", StringComparison.OrdinalIgnoreCase))
+            {
+                var fileName = Path.GetFileName(path);
+                throw new IOException($"The file '{fileName}' is currently open and locked by another application. Please save and close the file, then try again.", ex);
+            }
         }
     }
 }
