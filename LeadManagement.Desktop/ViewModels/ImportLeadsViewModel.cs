@@ -547,84 +547,8 @@ namespace LeadManagement.Desktop.ViewModels
                 throw new InvalidOperationException("The CSV file is empty or only contains a header.");
             }
 
-            var headerLine = lines[0];
-            var headers = SplitCsvLine(headerLine)
-                .Select(h => h.Trim().ToLowerInvariant().Replace("_", " "))
-                .ToList();
-
-            int GetColIndex(params string[] aliases)
-            {
-                // Pass 1: Exact matches first
-                foreach (var alias in aliases)
-                {
-                    for (int i = 0; i < headers.Count; i++)
-                    {
-                        if (string.Equals(headers[i], alias, StringComparison.OrdinalIgnoreCase))
-                            return i;
-                    }
-                }
-
-                // Pass 2: Substring matches (excluding generic collisions)
-                foreach (var alias in aliases)
-                {
-                    if (alias.Equals("name", StringComparison.OrdinalIgnoreCase))
-                        continue;
-
-                    for (int i = 0; i < headers.Count; i++)
-                    {
-                        var h = headers[i];
-                        if (alias.Contains("contact") && (h.Contains("business") || h.Contains("company")))
-                            continue;
-
-                        if (h.Contains(alias, StringComparison.OrdinalIgnoreCase))
-                            return i;
-                    }
-                }
-                return -1;
-            }
-
-            int idxBusiness = GetColIndex("business name", "company name", "business", "company");
-            int idxAddress  = GetColIndex("address", "street");
-            int idxCity     = GetColIndex("city");
-            int idxCounty   = GetColIndex("county");
-            int idxState    = GetColIndex("state");
-            int idxZip      = GetColIndex("zip code", "zip", "postal");
-            int idxCell     = GetColIndex("cell number", "cell", "phone", "telephone", "mobile");
-            int idxFax      = GetColIndex("fax");
-            int idxSales    = GetColIndex("annual sales", "sales");
-            int idxEmp      = GetColIndex("number of employee", "employees", "number of employees");
-            int idxTitle    = GetColIndex("title", "job title");
-            int idxContact  = GetColIndex("contact name", "contact person", "contact", "contact_name", "full name", "person name", "contactname", "name");
-            int idxWeb      = GetColIndex("website", "web", "url", "site");
-            int idxSicCode  = GetColIndex("sic code", "sic");
-            int idxSicDesc  = GetColIndex("sic description", "sic desc");
-            int idxNaicsCod = GetColIndex("naics code", "naics");
-            int idxNaicsDes = GetColIndex("naics description", "naics desc");
-
-            if (idxContact == idxBusiness) idxContact = -1;
-
-            string CleanContactName(string raw)
-            {
-                if (string.IsNullOrWhiteSpace(raw)) return string.Empty;
-                var trimmed = raw.Trim();
-                if (trimmed.Equals("contact name", StringComparison.OrdinalIgnoreCase) ||
-                    trimmed.Equals("contact", StringComparison.OrdinalIgnoreCase) ||
-                    trimmed.Equals("contact_name", StringComparison.OrdinalIgnoreCase) ||
-                    trimmed.Equals("name", StringComparison.OrdinalIgnoreCase))
-                    return string.Empty;
-                return trimmed;
-            }
-
-            string SafeGet(string[] parts, int index, int fallbackIndex, string defaultVal = "")
-            {
-                int target = index >= 0 ? index : fallbackIndex;
-                if (target >= 0 && target < parts.Length)
-                {
-                    var val = parts[target].Trim();
-                    return string.IsNullOrEmpty(val) ? defaultVal : val;
-                }
-                return defaultVal;
-            }
+            var rawHeaders = SplitCsvLine(lines[0]).Select(h => h.Trim()).ToList();
+            var mapping = LeadColumnMatcher.MapColumns(rawHeaders);
 
             int totalDataLines = lines.Length - 1;
             var result = new List<LeadModel>(totalDataLines);
@@ -642,35 +566,12 @@ namespace LeadManagement.Desktop.ViewModels
                 var line = lines[i];
                 if (string.IsNullOrWhiteSpace(line)) continue;
                 var parts = SplitCsvLine(line);
+                if (parts.All(string.IsNullOrWhiteSpace)) continue;
 
-                var bName = SafeGet(parts, idxBusiness, 0, "Unnamed Business");
-                if (bName.Equals("business name", StringComparison.OrdinalIgnoreCase) ||
-                    bName.Equals("business", StringComparison.OrdinalIgnoreCase))
+                var lead = LeadColumnMatcher.BuildLead(parts, mapping, rowId++, DefaultStatus, BatchName);
+                if (lead.BusinessName.Equals("business name", StringComparison.OrdinalIgnoreCase) ||
+                    lead.BusinessName.Equals("business", StringComparison.OrdinalIgnoreCase))
                     continue; // Skip repeated header rows
-
-                var lead = new LeadModel
-                {
-                    Id = rowId++,
-                    BatchName = BatchName,
-                    BusinessName = bName,
-                    Address = SafeGet(parts, idxAddress, 1),
-                    City = SafeGet(parts, idxCity, 2),
-                    County = SafeGet(parts, idxCounty, 3),
-                    State = SafeGet(parts, idxState, 4, "NE"),
-                    ZipCode = SafeGet(parts, idxZip, 5),
-                    CellNumber = SafeGet(parts, idxCell, 6),
-                    Fax = SafeGet(parts, idxFax, 7),
-                    AnnualSales = SafeGet(parts, idxSales, 8, "Less than 500,000"),
-                    NumberOfEmployees = SafeGet(parts, idxEmp, 9, "1 to 4"),
-                    Title = SafeGet(parts, idxTitle, 10),
-                    ContactName = CleanContactName(SafeGet(parts, idxContact, 11)),
-                    Website = SafeGet(parts, idxWeb, 12),
-                    SicCode = SafeGet(parts, idxSicCode, 13, "58120000"),
-                    SicDescription = SafeGet(parts, idxSicDesc, 14, "EATING PLACES"),
-                    NaicsCode = SafeGet(parts, idxNaicsCod, 15, "722511"),
-                    NaicsDescription = SafeGet(parts, idxNaicsDes, 16, "RESTAURANTS"),
-                    Status = DefaultStatus
-                };
 
                 result.Add(lead);
             }
@@ -707,89 +608,16 @@ namespace LeadManagement.Desktop.ViewModels
 
             int totalDataRows = rows.Count - 1;
 
-            // --- Header detection (row 1) ---
-            var headerRow = rows[0];
-            var headers = headerRow.Cells()
-                .Select(c => (c.IsEmpty() ? string.Empty : c.GetFormattedString()).Trim().ToLowerInvariant().Replace("_", " "))
+            // --- Intelligent header detection (row 1) ---
+            var rawHeaders = rows[0].Cells()
+                .Select(c => (c.IsEmpty() ? string.Empty : c.GetFormattedString()).Trim())
                 .ToList();
 
-            int GetColIndex(params string[] aliases)
-            {
-                // Pass 1: Exact matches first
-                foreach (var alias in aliases)
-                {
-                    for (int i = 0; i < headers.Count; i++)
-                    {
-                        if (string.Equals(headers[i], alias, StringComparison.OrdinalIgnoreCase))
-                            return i;
-                    }
-                }
-
-                // Pass 2: Substring matches (excluding generic collisions)
-                foreach (var alias in aliases)
-                {
-                    if (alias.Equals("name", StringComparison.OrdinalIgnoreCase))
-                        continue;
-
-                    for (int i = 0; i < headers.Count; i++)
-                    {
-                        var h = headers[i];
-                        if (alias.Contains("contact") && (h.Contains("business") || h.Contains("company")))
-                            continue;
-
-                        if (h.Contains(alias, StringComparison.OrdinalIgnoreCase))
-                            return i;
-                    }
-                }
-                return -1;
-            }
-
-            int idxBusiness = GetColIndex("business name", "company name", "business", "company");
-            int idxAddress  = GetColIndex("address", "street");
-            int idxCity     = GetColIndex("city");
-            int idxCounty   = GetColIndex("county");
-            int idxState    = GetColIndex("state");
-            int idxZip      = GetColIndex("zip code", "zip", "postal");
-            int idxCell     = GetColIndex("cell number", "cell", "phone", "telephone", "mobile");
-            int idxFax      = GetColIndex("fax");
-            int idxSales    = GetColIndex("annual sales", "sales");
-            int idxEmp      = GetColIndex("number of employee", "employees", "number of employees");
-            int idxTitle    = GetColIndex("title", "job title");
-            int idxContact  = GetColIndex("contact name", "contact person", "contact", "contact_name", "full name", "person name", "contactname", "name");
-            int idxWeb      = GetColIndex("website", "web", "url", "site");
-            int idxSicCode  = GetColIndex("sic code", "sic");
-            int idxSicDesc  = GetColIndex("sic description", "sic desc");
-            int idxNaicsCod = GetColIndex("naics code", "naics");
-            int idxNaicsDes = GetColIndex("naics description", "naics desc");
-
-            if (idxContact == idxBusiness) idxContact = -1;
-
-            string CleanContactName(string raw)
-            {
-                if (string.IsNullOrWhiteSpace(raw)) return string.Empty;
-                var trimmed = raw.Trim();
-                if (trimmed.Equals("contact name", StringComparison.OrdinalIgnoreCase) ||
-                    trimmed.Equals("contact", StringComparison.OrdinalIgnoreCase) ||
-                    trimmed.Equals("contact_name", StringComparison.OrdinalIgnoreCase) ||
-                    trimmed.Equals("name", StringComparison.OrdinalIgnoreCase))
-                    return string.Empty;
-                return trimmed;
-            }
-
-            string SafeGet(string[] parts, int index, int fallbackIndex, string defaultVal = "")
-            {
-                int target = index >= 0 ? index : fallbackIndex;
-                if (target >= 0 && target < parts.Length)
-                {
-                    var val = parts[target].Trim();
-                    return string.IsNullOrEmpty(val) ? defaultVal : val;
-                }
-                return defaultVal;
-            }
+            var mapping = LeadColumnMatcher.MapColumns(rawHeaders);
+            int colCount = rawHeaders.Count;
 
             var result = new List<LeadModel>(totalDataRows);
             int rowId = 1;
-            int colCount = headers.Count;
             int counter = 0;
 
             foreach (var row in rows.Skip(1))
@@ -818,34 +646,10 @@ namespace LeadManagement.Desktop.ViewModels
 
                 if (parts.All(string.IsNullOrWhiteSpace)) continue;
 
-                var bName = SafeGet(parts, idxBusiness, 0, "Unnamed Business");
-                if (bName.Equals("business name", StringComparison.OrdinalIgnoreCase) ||
-                    bName.Equals("business", StringComparison.OrdinalIgnoreCase))
+                var lead = LeadColumnMatcher.BuildLead(parts, mapping, rowId++, DefaultStatus, BatchName);
+                if (lead.BusinessName.Equals("business name", StringComparison.OrdinalIgnoreCase) ||
+                    lead.BusinessName.Equals("business", StringComparison.OrdinalIgnoreCase))
                     continue; // Skip repeated header rows
-
-                var lead = new LeadModel
-                {
-                    Id               = rowId++,
-                    BatchName        = BatchName,
-                    BusinessName     = bName,
-                    Address          = SafeGet(parts, idxAddress,  1),
-                    City             = SafeGet(parts, idxCity,     2),
-                    County           = SafeGet(parts, idxCounty,   3),
-                    State            = SafeGet(parts, idxState,    4, "NE"),
-                    ZipCode          = SafeGet(parts, idxZip,      5),
-                    CellNumber       = SafeGet(parts, idxCell,     6),
-                    Fax              = SafeGet(parts, idxFax,      7),
-                    AnnualSales      = SafeGet(parts, idxSales,    8, "Less than 500,000"),
-                    NumberOfEmployees= SafeGet(parts, idxEmp,      9, "1 to 4"),
-                    Title            = SafeGet(parts, idxTitle,   10),
-                    ContactName      = CleanContactName(SafeGet(parts, idxContact, 11)),
-                    Website          = SafeGet(parts, idxWeb,     12),
-                    SicCode          = SafeGet(parts, idxSicCode, 13, "58120000"),
-                    SicDescription   = SafeGet(parts, idxSicDesc, 14, "EATING PLACES"),
-                    NaicsCode        = SafeGet(parts, idxNaicsCod,15, "722511"),
-                    NaicsDescription = SafeGet(parts, idxNaicsDes,16, "RESTAURANTS"),
-                    Status           = DefaultStatus
-                };
 
                 result.Add(lead);
             }

@@ -1324,140 +1324,42 @@ namespace LeadManagement.Desktop.ViewModels
             var lines   = File.ReadAllLines(path);
             if (lines.Length <= 1) return records;
 
-            var headers = SplitCsvLine(lines[0])
-                .Select(h => h.Trim().ToLowerInvariant().Replace("_", " ")).ToList();
-
-            int GetCol(params string[] aliases)
-            {
-                // Pass 1: Exact matches first
-                foreach (var a in aliases)
-                {
-                    for (int i = 0; i < headers.Count; i++)
-                    {
-                        if (string.Equals(headers[i], a, StringComparison.OrdinalIgnoreCase))
-                            return i;
-                    }
-                }
-
-                // Pass 2: Substring matches (excluding generic collisions)
-                foreach (var a in aliases)
-                {
-                    // Generic words like "name" should not loosely match "business name"
-                    if (a.Equals("name", StringComparison.OrdinalIgnoreCase))
-                        continue;
-
-                    for (int i = 0; i < headers.Count; i++)
-                    {
-                        var h = headers[i];
-                        if (a.Contains("contact") && (h.Contains("business") || h.Contains("company")))
-                            continue;
-
-                        if (h.Contains(a, StringComparison.OrdinalIgnoreCase))
-                            return i;
-                    }
-                }
-                return -1;
-            }
-
-            int idxDate     = GetCol("date", "call date");
-            int idxDisp     = GetCol("call disposition", "call composition", "disposition", "composition");
-            int idxAgent    = GetCol("agent assigned", "assigned agent", "agent");
-            int idxNotes    = GetCol("notes", "note");
-            int idxCalls    = GetCol("of cal", "# of cal", "# of call", "# of calls", "call count", "number of call", "calls");
-            int idxBusiness = GetCol("business name", "company name", "business", "company");
-            int idxAddress  = GetCol("address", "street");
-            int idxCity     = GetCol("city");
-            int idxCounty   = GetCol("county");
-            int idxState    = GetCol("state");
-            int idxZip      = GetCol("zip code", "zip", "postal");
-            int idxCell     = GetCol("cell number", "cell", "phone", "telephone", "mobile");
-            int idxEmail    = GetCol("email", "e-mail");
-            int idxFax      = GetCol("fax");
-            int idxSales    = GetCol("annual sales", "sales");
-            int idxEmp      = GetCol("number of employee", "employees", "number of employees");
-            int idxTitle    = GetCol("title", "job title");
-            int idxContact  = GetCol("contact name", "contact person", "contact", "contact_name", "full name", "person name", "contactname", "name");
-            int idxWeb      = GetCol("website", "web", "url", "site");
-            int idxSicCode  = GetCol("sic code", "sic");
-            int idxSicDesc  = GetCol("sic description", "sic desc");
-            int idxNaics    = GetCol("naics code", "naics");
-            int idxNaicsD   = GetCol("naics description", "naics desc");
-
-            if (idxContact == idxBusiness)
-            {
-                idxContact = -1;
-            }
-
-            string SafeGet(string[] parts, int idx, int fallback, string def = "")
-            {
-                int t = idx >= 0 ? idx : fallback;
-                if (t >= 0 && t < parts.Length)
-                { var v = parts[t].Trim(); return string.IsNullOrEmpty(v) ? def : v; }
-                return def;
-            }
-
-            string CleanContactName(string raw)
-            {
-                if (string.IsNullOrWhiteSpace(raw)) return string.Empty;
-                var trimmed = raw.Trim();
-                if (trimmed.Equals("contact name", StringComparison.OrdinalIgnoreCase) ||
-                    trimmed.Equals("contact", StringComparison.OrdinalIgnoreCase) ||
-                    trimmed.Equals("contact_name", StringComparison.OrdinalIgnoreCase) ||
-                    trimmed.Equals("name", StringComparison.OrdinalIgnoreCase))
-                {
-                    return string.Empty;
-                }
-                return trimmed;
-            }
+            var rawHeaders = SplitCsvLine(lines[0]).Select(h => h.Trim()).ToList();
+            var mapping = LeadColumnMatcher.MapColumns(rawHeaders);
 
             int rowId = 1;
             foreach (var line in lines.Skip(1))
             {
                 if (string.IsNullOrWhiteSpace(line)) continue;
                 var parts = SplitCsvLine(line);
+                if (parts.All(string.IsNullOrWhiteSpace)) continue;
 
-                var bName = SafeGet(parts, idxBusiness, 0, "Unnamed Business");
-                if (bName.Equals("business name", StringComparison.OrdinalIgnoreCase) ||
-                    bName.Equals("business", StringComparison.OrdinalIgnoreCase))
+                var lead = LeadColumnMatcher.BuildLead(parts, mapping, rowId++, "New Lead");
+                if (lead.BusinessName.Equals("business name", StringComparison.OrdinalIgnoreCase) ||
+                    lead.BusinessName.Equals("business", StringComparison.OrdinalIgnoreCase))
                 {
                     continue; // Skip repeated header row
                 }
 
-                var rawDate = SafeGet(parts, idxDate, -1);
-                var dateVal = !string.IsNullOrWhiteSpace(rawDate) ? rawDate : string.Empty;
-                var rawCalls = SafeGet(parts, idxCalls, -1);
-                int callCount = int.TryParse(rawCalls, out var cc) && cc > 0 ? cc : 1;
-
-                var cName = CleanContactName(SafeGet(parts, idxContact, 11));
-
-                records.Add(new LeadModel
+                if (mapping.CallDateIndex >= 0 && mapping.CallDateIndex < parts.Length)
+                    lead.CallDate = parts[mapping.CallDateIndex].Trim();
+                if (mapping.CallDispositionIndex >= 0 && mapping.CallDispositionIndex < parts.Length)
+                    lead.CallDisposition = parts[mapping.CallDispositionIndex].Trim();
+                if (mapping.AssignedAgentIndex >= 0 && mapping.AssignedAgentIndex < parts.Length)
+                    lead.AssignedAgent = parts[mapping.AssignedAgentIndex].Trim();
+                if (mapping.NotesIndex >= 0 && mapping.NotesIndex < parts.Length)
+                    lead.Notes = parts[mapping.NotesIndex].Trim();
+                if (mapping.CallCountIndex >= 0 && mapping.CallCountIndex < parts.Length)
                 {
-                    Id               = rowId++,
-                    CallDate         = dateVal,
-                    CallDisposition  = SafeGet(parts, idxDisp, -1),
-                    AssignedAgent    = SafeGet(parts, idxAgent, -1),
-                    Notes            = SafeGet(parts, idxNotes, -1),
-                    CallCount        = callCount,
-                    BusinessName     = bName,
-                    Address          = SafeGet(parts, idxAddress,  1),
-                    City             = SafeGet(parts, idxCity,     2),
-                    County           = SafeGet(parts, idxCounty,   3),
-                    State            = SafeGet(parts, idxState,    4, "NE"),
-                    ZipCode          = SafeGet(parts, idxZip,      5),
-                    CellNumber       = SafeGet(parts, idxCell,     6),
-                    Email            = SafeGet(parts, idxEmail,    -1),
-                    Fax              = SafeGet(parts, idxFax,      7),
-                    AnnualSales      = SafeGet(parts, idxSales,    8, "Less than 500,000"),
-                    NumberOfEmployees= SafeGet(parts, idxEmp,      9, "1 to 4"),
-                    Title            = SafeGet(parts, idxTitle,   10),
-                    ContactName      = cName,
-                    Website          = SafeGet(parts, idxWeb,     12),
-                    SicCode          = SafeGet(parts, idxSicCode, 13, "58120000"),
-                    SicDescription   = SafeGet(parts, idxSicDesc, 14, "EATING PLACES"),
-                    NaicsCode        = SafeGet(parts, idxNaics,   15, "722511"),
-                    NaicsDescription = SafeGet(parts, idxNaicsD,  16, "RESTAURANTS"),
-                    Status           = "New Lead"
-                });
+                    var rawCalls = parts[mapping.CallCountIndex].Trim();
+                    lead.CallCount = int.TryParse(rawCalls, out var cc) && cc > 0 ? cc : 1;
+                }
+                else
+                {
+                    lead.CallCount = 1;
+                }
+
+                records.Add(lead);
             }
             return records;
         }
@@ -1473,95 +1375,13 @@ namespace LeadManagement.Desktop.ViewModels
             var rows = usedRange.RowsUsed().ToList();
             if (rows.Count <= 1) return records;
 
-            var headers = rows[0].Cells()
-                .Select(c => (c.IsEmpty() ? string.Empty : c.GetFormattedString()).Trim().ToLowerInvariant().Replace("_", " "))
+            var rawHeaders = rows[0].Cells()
+                .Select(c => (c.IsEmpty() ? string.Empty : c.GetFormattedString()).Trim())
                 .ToList();
 
-            int GetCol(params string[] aliases)
-            {
-                // Pass 1: Exact matches first
-                foreach (var a in aliases)
-                {
-                    for (int i = 0; i < headers.Count; i++)
-                    {
-                        if (string.Equals(headers[i], a, StringComparison.OrdinalIgnoreCase))
-                            return i;
-                    }
-                }
-
-                // Pass 2: Substring matches (excluding generic collisions)
-                foreach (var a in aliases)
-                {
-                    // Generic words like "name" should not loosely match "business name"
-                    if (a.Equals("name", StringComparison.OrdinalIgnoreCase))
-                        continue;
-
-                    for (int i = 0; i < headers.Count; i++)
-                    {
-                        var h = headers[i];
-                        if (a.Contains("contact") && (h.Contains("business") || h.Contains("company")))
-                            continue;
-
-                        if (h.Contains(a, StringComparison.OrdinalIgnoreCase))
-                            return i;
-                    }
-                }
-                return -1;
-            }
-
-            int idxDate     = GetCol("date", "call date");
-            int idxDisp     = GetCol("call disposition", "call composition", "disposition", "composition");
-            int idxAgent    = GetCol("agent assigned", "assigned agent", "agent");
-            int idxNotes    = GetCol("notes", "note");
-            int idxCalls    = GetCol("of cal", "# of cal", "# of call", "# of calls", "call count", "number of call", "calls");
-            int idxBusiness = GetCol("business name", "company name", "business", "company");
-            int idxAddress  = GetCol("address", "street");
-            int idxCity     = GetCol("city");
-            int idxCounty   = GetCol("county");
-            int idxState    = GetCol("state");
-            int idxZip      = GetCol("zip code", "zip", "postal");
-            int idxCell     = GetCol("cell number", "cell", "phone", "telephone", "mobile");
-            int idxEmail    = GetCol("email", "e-mail");
-            int idxFax      = GetCol("fax");
-            int idxSales    = GetCol("annual sales", "sales");
-            int idxEmp      = GetCol("number of employee", "employees", "number of employees");
-            int idxTitle    = GetCol("title", "job title");
-            int idxContact  = GetCol("contact name", "contact person", "contact", "contact_name", "full name", "person name", "contactname", "name");
-            int idxWeb      = GetCol("website", "web", "url", "site");
-            int idxSicCode  = GetCol("sic code", "sic");
-            int idxSicDesc  = GetCol("sic description", "sic desc");
-            int idxNaics    = GetCol("naics code", "naics");
-            int idxNaicsD   = GetCol("naics description", "naics desc");
-
-            if (idxContact == idxBusiness)
-            {
-                idxContact = -1;
-            }
-
-            string SafeGet(string[] parts, int idx, int fallback, string def = "")
-            {
-                int t = idx >= 0 ? idx : fallback;
-                if (t >= 0 && t < parts.Length)
-                { var v = parts[t].Trim(); return string.IsNullOrEmpty(v) ? def : v; }
-                return def;
-            }
-
-            string CleanContactName(string raw)
-            {
-                if (string.IsNullOrWhiteSpace(raw)) return string.Empty;
-                var trimmed = raw.Trim();
-                if (trimmed.Equals("contact name", StringComparison.OrdinalIgnoreCase) ||
-                    trimmed.Equals("contact", StringComparison.OrdinalIgnoreCase) ||
-                    trimmed.Equals("contact_name", StringComparison.OrdinalIgnoreCase) ||
-                    trimmed.Equals("name", StringComparison.OrdinalIgnoreCase))
-                {
-                    return string.Empty;
-                }
-                return trimmed;
-            }
-
-            int colCount = headers.Count;
-            int rowId    = 1;
+            var mapping = LeadColumnMatcher.MapColumns(rawHeaders);
+            int colCount = rawHeaders.Count;
+            int rowId = 1;
 
             foreach (var row in rows.Skip(1))
             {
@@ -1577,47 +1397,32 @@ namespace LeadManagement.Desktop.ViewModels
 
                 if (parts.All(string.IsNullOrWhiteSpace)) continue;
 
-                var bName = SafeGet(parts, idxBusiness, 0, "Unnamed Business");
-                if (bName.Equals("business name", StringComparison.OrdinalIgnoreCase) ||
-                    bName.Equals("business", StringComparison.OrdinalIgnoreCase))
+                var lead = LeadColumnMatcher.BuildLead(parts, mapping, rowId++, "New Lead");
+                if (lead.BusinessName.Equals("business name", StringComparison.OrdinalIgnoreCase) ||
+                    lead.BusinessName.Equals("business", StringComparison.OrdinalIgnoreCase))
                 {
                     continue; // Skip repeated header row
                 }
 
-                var rawDate = SafeGet(parts, idxDate, -1);
-                var dateVal = !string.IsNullOrWhiteSpace(rawDate) ? rawDate : string.Empty;
-                var rawCalls = SafeGet(parts, idxCalls, -1);
-                int callCount = int.TryParse(rawCalls, out var cc) && cc > 0 ? cc : 1;
-                var cName = CleanContactName(SafeGet(parts, idxContact, 11));
-
-                records.Add(new LeadModel
+                if (mapping.CallDateIndex >= 0 && mapping.CallDateIndex < parts.Length)
+                    lead.CallDate = parts[mapping.CallDateIndex].Trim();
+                if (mapping.CallDispositionIndex >= 0 && mapping.CallDispositionIndex < parts.Length)
+                    lead.CallDisposition = parts[mapping.CallDispositionIndex].Trim();
+                if (mapping.AssignedAgentIndex >= 0 && mapping.AssignedAgentIndex < parts.Length)
+                    lead.AssignedAgent = parts[mapping.AssignedAgentIndex].Trim();
+                if (mapping.NotesIndex >= 0 && mapping.NotesIndex < parts.Length)
+                    lead.Notes = parts[mapping.NotesIndex].Trim();
+                if (mapping.CallCountIndex >= 0 && mapping.CallCountIndex < parts.Length)
                 {
-                    Id               = rowId++,
-                    CallDate         = dateVal,
-                    CallDisposition  = SafeGet(parts, idxDisp, -1),
-                    AssignedAgent    = SafeGet(parts, idxAgent, -1),
-                    Notes            = SafeGet(parts, idxNotes, -1),
-                    CallCount        = callCount,
-                    BusinessName     = bName,
-                    Address          = SafeGet(parts, idxAddress,  1),
-                    City             = SafeGet(parts, idxCity,     2),
-                    County           = SafeGet(parts, idxCounty,   3),
-                    State            = SafeGet(parts, idxState,    4, "NE"),
-                    ZipCode          = SafeGet(parts, idxZip,      5),
-                    CellNumber       = SafeGet(parts, idxCell,     6),
-                    Email            = SafeGet(parts, idxEmail,    -1),
-                    Fax              = SafeGet(parts, idxFax,      7),
-                    AnnualSales      = SafeGet(parts, idxSales,    8, "Less than 500,000"),
-                    NumberOfEmployees= SafeGet(parts, idxEmp,      9, "1 to 4"),
-                    Title            = SafeGet(parts, idxTitle,   10),
-                    ContactName      = cName,
-                    Website          = SafeGet(parts, idxWeb,     12),
-                    SicCode          = SafeGet(parts, idxSicCode, 13, "58120000"),
-                    SicDescription   = SafeGet(parts, idxSicDesc, 14, "EATING PLACES"),
-                    NaicsCode        = SafeGet(parts, idxNaics,   15, "722511"),
-                    NaicsDescription = SafeGet(parts, idxNaicsD,  16, "RESTAURANTS"),
-                    Status           = "New Lead"
-                });
+                    var rawCalls = parts[mapping.CallCountIndex].Trim();
+                    lead.CallCount = int.TryParse(rawCalls, out var cc) && cc > 0 ? cc : 1;
+                }
+                else
+                {
+                    lead.CallCount = 1;
+                }
+
+                records.Add(lead);
             }
             return records;
         }
