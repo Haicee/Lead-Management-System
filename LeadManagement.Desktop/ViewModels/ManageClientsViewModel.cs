@@ -71,6 +71,17 @@ namespace LeadManagement.Desktop.ViewModels
         private string _loadingModalMessage = string.Empty;
         private string _loadingModalDetail = string.Empty;
         private System.Threading.CancellationTokenSource? _loadingCts;
+        private bool _isProcessingUpload;
+
+        /// <summary>
+        /// Logs diagnostic messages to both Console and System.Diagnostics.Debug.
+        /// </summary>
+        private static void LogInfo(string message)
+        {
+            var formatted = $"[ManageClients] {message}";
+            Console.WriteLine(formatted);
+            System.Diagnostics.Debug.WriteLine(formatted);
+        }
 
         // Script Preview State
         private bool _isScriptPreviewOpen;
@@ -615,21 +626,36 @@ namespace LeadManagement.Desktop.ViewModels
 
         private void ExecuteCancelLoadingModal()
         {
+            LogInfo("Cancel requested on Loading Modal by user.");
             try
             {
                 _loadingCts?.Cancel();
             }
-            catch { }
+            catch (Exception ex)
+            {
+                LogInfo($"Exception when requesting cancellation: {ex.Message}");
+            }
             IsLoadingModalOpen = false;
         }
 
         private async Task ProcessFileUploadAsync(ClientModel client, string filePath)
         {
+            // If another upload is already running or cancelling, signal it and wait/reset
+            if (_isProcessingUpload)
+            {
+                LogInfo("Another upload process is already running. Requesting cancellation of the previous operation...");
+                try { _loadingCts?.Cancel(); } catch { }
+            }
+
+            _isProcessingUpload = true;
+
             var fileInfo = new FileInfo(filePath);
             var ext      = fileInfo.Extension.ToLowerInvariant();
             var sizeDisplay = $"{fileInfo.Length / 1024.0:F1} KB";
 
-            _loadingCts?.Dispose();
+            LogInfo($"[Start] ProcessFileUploadAsync for Client '{client.FullName}' (ID: {client.Id}) | File: '{fileInfo.Name}' ({sizeDisplay})");
+
+            // Create fresh cancellation token source (do not dispose old one immediately to avoid in-flight race conditions)
             _loadingCts = new System.Threading.CancellationTokenSource();
             var ct = _loadingCts.Token;
 
@@ -641,21 +667,33 @@ namespace LeadManagement.Desktop.ViewModels
             try
             {
                 List<LeadModel>? leads = null;
+
+                // Background parsing with graceful cancellation checking (no ThrowIfCancellationRequested inside lambda)
                 await Task.Run(() =>
                 {
-                    ct.ThrowIfCancellationRequested();
+                    if (ct.IsCancellationRequested) return;
+
                     leads = ext == ".csv"
-                        ? ParseCsvFile(filePath)
-                        : ParseExcelFile(filePath);
-                    ct.ThrowIfCancellationRequested();
+                        ? ParseCsvFile(filePath, ct)
+                        : ParseExcelFile(filePath, ct);
                 }, ct);
 
-                if (leads == null || leads.Count == 0)
+                // If user clicked cancel during parsing, abort cleanly without throwing exceptions
+                if (ct.IsCancellationRequested || leads == null)
                 {
+                    LogInfo("[Cancelled] Parsing cancelled by user.");
+                    ShowBanner("Upload cancelled by user.", isError: false);
+                    return;
+                }
+
+                if (leads.Count == 0)
+                {
+                    LogInfo("[Notice] No data rows found in the selected file.");
                     ShowBanner("No data rows found in the selected file.", isError: true);
                     return;
                 }
 
+                LogInfo($"[Parsed] Successfully prepared {leads.Count:N0} leads. Sending to API...");
                 LoadingModalMessage = $"Uploading {leads.Count:N0} leads for '{client.FullName}'...";
                 LoadingModalDetail  = "Sending records to server and creating file entry...";
 
@@ -664,6 +702,7 @@ namespace LeadManagement.Desktop.ViewModels
 
                 if (ok)
                 {
+                    LogInfo($"[Success] Uploaded {leads.Count:N0} leads for '{client.FullName}'.");
                     client.IsExpanded = true;
                     ShowBanner($"✓ {leads.Count:N0} leads uploaded to '{client.FullName}' from '{fileInfo.Name}'.", isError: false);
                     await LoadClientsAsync(preserveBanner: true);
@@ -678,25 +717,31 @@ namespace LeadManagement.Desktop.ViewModels
                 {
                     if (ct.IsCancellationRequested)
                     {
+                        LogInfo("[Cancelled] Upload API call was cancelled by user.");
                         ShowBanner("Upload cancelled by user.", isError: false);
                     }
                     else
                     {
+                        LogInfo($"[Failed] Upload API failed: {msg}");
                         ShowBanner($"Upload failed: {msg}", isError: true);
                     }
                 }
             }
             catch (OperationCanceledException)
             {
+                LogInfo("[Cancelled] OperationCanceledException caught. Upload workflow cancelled cleanly.");
                 ShowBanner("Upload cancelled by user.", isError: false);
             }
             catch (Exception ex)
             {
+                LogInfo($"[Error] Could not parse or upload file: {ex.Message}");
                 ShowBanner($"Could not parse or upload file: {ex.Message}", isError: true);
             }
             finally
             {
                 IsLoadingModalOpen = false;
+                _isProcessingUpload = false;
+                LogInfo("[Completed] Upload workflow finished.");
             }
         }
 
@@ -1318,8 +1363,15 @@ namespace LeadManagement.Desktop.ViewModels
         // ----------------------------------------------------------------
         // File parsing (reused from ImportLeadsViewModel)
         // ----------------------------------------------------------------
-        private static List<LeadModel> ParseCsvFile(string path)
+        /// <summary>
+        /// Parses a CSV file into LeadModel records. Checks the cancellation token on each row
+        /// so the user can abort large files immediately without waiting or throwing unhandled exceptions.
+        /// </summary>
+        private static List<LeadModel>? ParseCsvFile(string path, CancellationToken ct = default)
         {
+            LogInfo($"[ParseCsv] Starting parse for file: '{Path.GetFileName(path)}'");
+            if (ct.IsCancellationRequested) return null;
+
             var records = new List<LeadModel>();
             var lines   = LeadColumnMatcher.ReadAllLinesShared(path);
             if (lines.Length <= 1) return records;
@@ -1330,6 +1382,13 @@ namespace LeadManagement.Desktop.ViewModels
             int rowId = 1;
             foreach (var line in lines.Skip(1))
             {
+                // Immediate cooperative cancellation check
+                if (ct.IsCancellationRequested)
+                {
+                    LogInfo($"[ParseCsv] Cancelled at row {rowId}. Aborting parse.");
+                    return null;
+                }
+
                 if (string.IsNullOrWhiteSpace(line)) continue;
                 var parts = SplitCsvLine(line);
                 if (parts.All(string.IsNullOrWhiteSpace)) continue;
@@ -1361,11 +1420,20 @@ namespace LeadManagement.Desktop.ViewModels
 
                 records.Add(lead);
             }
+
+            LogInfo($"[ParseCsv] Successfully parsed {records.Count:N0} leads.");
             return records;
         }
 
-        private static List<LeadModel> ParseExcelFile(string path)
+        /// <summary>
+        /// Parses an Excel file (.xlsx/.xls) into LeadModel records. Checks the cancellation token
+        /// on each row so the user can abort immediately.
+        /// </summary>
+        private static List<LeadModel>? ParseExcelFile(string path, CancellationToken ct = default)
         {
+            LogInfo($"[ParseExcel] Starting parse for file: '{Path.GetFileName(path)}'");
+            if (ct.IsCancellationRequested) return null;
+
             var records = new List<LeadModel>();
             using var workbook   = LeadColumnMatcher.OpenWorkbookShared(path);
             var worksheet        = workbook.Worksheets.First();
@@ -1385,6 +1453,13 @@ namespace LeadManagement.Desktop.ViewModels
 
             foreach (var row in rows.Skip(1))
             {
+                // Immediate cooperative cancellation check
+                if (ct.IsCancellationRequested)
+                {
+                    LogInfo($"[ParseExcel] Cancelled at row {rowId}. Aborting parse.");
+                    return null;
+                }
+
                 var parts = Enumerable.Range(1, colCount).Select(col =>
                 {
                     var cell = row.Cell(col);
@@ -1424,6 +1499,8 @@ namespace LeadManagement.Desktop.ViewModels
 
                 records.Add(lead);
             }
+
+            LogInfo($"[ParseExcel] Successfully parsed {records.Count:N0} leads.");
             return records;
         }
 
