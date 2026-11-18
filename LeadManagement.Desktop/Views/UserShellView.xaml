@@ -293,9 +293,14 @@
                 </Grid>
             </Border>
 
-            <!-- MAIN CONTENT AREA: ASSIGNED CLIENTS (FOLDERING ACCORDION) -->
+            <!-- MAIN CONTENT AREA: ASSIGNED CLIENTS OR FULL LEAD FILE VIEW -->
             <Grid Grid.Column="1" Background="#F8FAFC">
-                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                <!-- ============================================================== -->
+                <!-- PAGE 1: MY ASSIGNED CLIENTS LIST                              -->
+                <!-- ============================================================== -->
+                <ScrollViewer VerticalScrollBarVisibility="Auto" 
+                              HorizontalScrollBarVisibility="Disabled"
+                              Visibility="{Binding UserDashboard.IsPreviewOpen, Converter={StaticResource InverseBoolToVisibilityConverter}}">
                     <StackPanel Margin="32,28,32,32">
 
                         <!-- Page Header -->
@@ -518,8 +523,8 @@
                                                                                 CommandParameter="{Binding}"
                                                                                 Style="{StaticResource SecondaryButtonStyle}"
                                                                                 Padding="12,6" Margin="0,0,8,0" FontSize="11.5"
-                                                                                ToolTip="Preview and call leads in this file">
-                                                                            <TextBlock Text="👁 Preview"/>
+                                                                                ToolTip="View and call leads in this file">
+                                                                            <TextBlock Text="👁 View"/>
                                                                         </Button>
 
                                                                         <!-- Export Button (Agent work export) -->
@@ -553,6 +558,379 @@
 
                     </StackPanel>
                 </ScrollViewer>
+
+                <!-- ============================================================== -->
+                <!-- PAGE 2: FULL LEAD FILE VIEW (NEXT PAGE WITH BACK BUTTON)       -->
+                <!-- ============================================================== -->
+                <Grid Visibility="{Binding UserDashboard.IsPreviewOpen, Converter={StaticResource BooleanToVisibilityConverter}}"
+                      Background="White">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>  <!-- Header Bar with Upper-Left Back Button -->
+                        <RowDefinition Height="Auto"/>  <!-- Search & Stats Toolbar -->
+                        <RowDefinition Height="*"/>     <!-- Edge-to-Edge DataGrid Table -->
+                        <RowDefinition Height="Auto"/>  <!-- Footer Bar -->
+                    </Grid.RowDefinitions>
+
+                    <!-- ROW 0: HEADER BAR WITH UPPER-LEFT BACK BUTTON -->
+                    <Border Grid.Row="0" Background="White" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1" Padding="24,14">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/> <!-- Back button -->
+                                <ColumnDefinition Width="*"/>    <!-- File title & meta -->
+                                <ColumnDefinition Width="Auto"/> <!-- Status badge & Actions -->
+                            </Grid.ColumnDefinitions>
+
+                            <!-- Upper Left Back Button -->
+                            <Button Grid.Column="0"
+                                    Command="{Binding UserDashboard.ClosePreviewCommand}"
+                                    Style="{StaticResource SecondaryButtonStyle}"
+                                    Padding="14,8"
+                                    Margin="0,0,18,0"
+                                    VerticalAlignment="Center"
+                                    ToolTip="Return to Assigned Clients list">
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <TextBlock Text="←" FontSize="15" FontWeight="Bold" Margin="0,0,8,0" VerticalAlignment="Center" Foreground="{StaticResource PrimaryBrush}"/>
+                                    <TextBlock Text="Back" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Button>
+
+                            <!-- Title & Subtitle -->
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                     
+                                    <TextBlock Text="{Binding UserDashboard.PreviewTitle}" FontSize="18" FontWeight="Bold"
+                                               Foreground="{StaticResource TextPrimaryBrush}" TextTrimming="CharacterEllipsis"/>
+                                </StackPanel>
+                                <TextBlock Text="{Binding UserDashboard.PreviewSubtitle}" FontSize="12.5"
+                                           Foreground="{StaticResource TextSecondaryBrush}" Margin="0,3,0,0"/>
+                            </StackPanel>
+
+                             
+                        </Grid>
+                    </Border>
+
+                    <!-- ROW 1: SEARCH & FILTER TOOLBAR -->
+                    <Border Grid.Row="1" Background="#F8FAFC" Padding="24,12" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+
+                            
+
+                            <!-- Quick Total Leads Chip -->
+                            <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                                <Border Background="White" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="8" Padding="12,6">
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                        <TextBlock Text="📊 Total Leads: " FontSize="12" Foreground="{StaticResource TextSecondaryBrush}"/>
+                                        <TextBlock Text="{Binding UserDashboard.FilteredPreviewLeads.Count, Mode=OneWay, StringFormat={}{0:N0}}"
+                                                   FontSize="12" FontWeight="Bold" Foreground="{StaticResource TextPrimaryBrush}"/>
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+
+                            <!-- Instant Search Box -->
+                            <Grid Grid.Column="1" MaxWidth="780" HorizontalAlignment="Right" VerticalAlignment="Center">
+                                <TextBox Text="{Binding UserDashboard.PreviewSearchText, UpdateSourceTrigger=PropertyChanged}"
+                                         Style="{StaticResource ModernTextBoxStyle}"
+                                         Padding="38,0,12,0"
+                                         Width="480"
+                                         Height="40"/>
+                                         
+                                <TextBlock Text="🔍" Foreground="#94A3B8" FontSize="13"
+                                           VerticalAlignment="Center" HorizontalAlignment="Left" Margin="12,0,0,0"
+                                           IsHitTestVisible="False"/>
+                                <TextBlock Text="Search business name, contact, phone, disposition, agent, notes…"
+                                           Foreground="#94A3B8" FontSize="12"
+                                           VerticalAlignment="Center" Margin="38,0,0,0"
+                                           IsHitTestVisible="False">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding UserDashboard.PreviewSearchText}" Value="">
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding UserDashboard.PreviewSearchText}" Value="{x:Null}">
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </Grid>
+                        </Grid>
+                    </Border>
+
+                    <!-- ROW 2: FULL DATA GRID TABLE -->
+                    <Grid Grid.Row="2" Background="White">
+                        <!-- Loading Preview Spinner -->
+                        <Border Visibility="{Binding UserDashboard.IsLoadingPreview, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                VerticalAlignment="Center" HorizontalAlignment="Center">
+                            <StackPanel>
+                                <TextBlock Text="⏳" FontSize="32" HorizontalAlignment="Center" Margin="0,0,0,10"/>
+                                <TextBlock Text="Loading leads data…" FontSize="13" Foreground="#64748B" HorizontalAlignment="Center"/>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Preview Data Grid (Full Width & Height) -->
+                        <DataGrid ItemsSource="{Binding UserDashboard.FilteredPreviewLeads}"
+                                  AutoGenerateColumns="False"
+                                  CanUserAddRows="False"
+                                  CanUserDeleteRows="False"
+                                  SelectionMode="Single"
+                                  GridLinesVisibility="None"
+                                  HorizontalGridLinesBrush="{x:Null}"
+                                  VerticalGridLinesBrush="{x:Null}"
+                                  Background="White"
+                                  RowBackground="White"
+                                  AlternatingRowBackground="#F8FAFC"
+                                  BorderThickness="0"
+                                  ColumnHeaderStyle="{StaticResource ModernDataGridColumnHeaderStyle}"
+                                  RowStyle="{StaticResource ModernDataGridRowStyle}"
+                                  CellStyle="{StaticResource CenteredCellStyle}"
+                                  AlternationCount="2"
+                                  RowHeight="40"
+                                  EnableRowVirtualization="True"
+                                  VirtualizingPanel.IsVirtualizing="True"
+                                  VirtualizingPanel.VirtualizationMode="Standard"
+                                  VerticalScrollBarVisibility="Auto"
+                                  HorizontalScrollBarVisibility="Auto"
+                                  Visibility="{Binding UserDashboard.IsLoadingPreview, Converter={StaticResource InverseBoolToVisibilityConverter}}">
+                            <DataGrid.Resources>
+                                <!-- Global cell text style -->
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="VerticalAlignment" Value="Center"/>
+                                    <Setter Property="TextDecorations" Value="{x:Null}"/>
+                                </Style>
+                            </DataGrid.Resources>
+                            <DataGrid.Columns>
+                                <!-- 1. DATE with Calendar Picker -->
+                                <DataGridTemplateColumn Header="DATE" Width="135" CanUserSort="True" SortMemberPath="SelectedDate">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <DatePicker SelectedDate="{Binding SelectedDate, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                         Height="28" VerticalAlignment="Center" VerticalContentAlignment="Center"
+                                                         BorderBrush="#CBD5E1" Background="White" Padding="4,1"
+                                                         ToolTip="Pick a date for this call"/>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+
+                                <!-- 2. CALL DISPOSITION Dropdown with Color Coding -->
+                                <DataGridTemplateColumn Header="CALL DISPOSITION" Width="190" CanUserSort="True" SortMemberPath="CallDisposition">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <ComboBox ItemsSource="{Binding Source={x:Static models:CallDispositionHelper.Dispositions}}"
+                                                      SelectedValue="{Binding CallDisposition, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                      SelectedValuePath="Name"
+                                                      Height="30" VerticalAlignment="Center"
+                                                      BorderBrush="#CBD5E1" Background="White">
+                                                <ComboBox.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <Border Background="{Binding BackgroundHex}"
+                                                                BorderBrush="{Binding BorderHex}"
+                                                                BorderThickness="1" CornerRadius="8"
+                                                                Padding="8,3" Margin="0,1" HorizontalAlignment="Stretch">
+                                                            <TextBlock Text="{Binding Name}"
+                                                                       Foreground="{Binding ForegroundHex}"
+                                                                       FontWeight="SemiBold" FontSize="11.5"/>
+                                                        </Border>
+                                                    </DataTemplate>
+                                                </ComboBox.ItemTemplate>
+                                            </ComboBox>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+
+                                <!-- 3. AGENT Assigned Dropdown -->
+                                <DataGridTemplateColumn Header="AGENT" Width="150" CanUserSort="True" SortMemberPath="AssignedAgent">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <ComboBox ItemsSource="{Binding AvailableAgentOptions}"
+                                                      SelectedItem="{Binding AssignedAgent, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                      Height="30" VerticalAlignment="Center"
+                                                      BorderBrush="#CBD5E1" Background="White">
+                                                <ComboBox.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                            <TextBlock FontSize="11" Margin="0,0,5,0" VerticalAlignment="Center">
+                                                                <TextBlock.Style>
+                                                                    <Style TargetType="TextBlock">
+                                                                        <Setter Property="Text" Value="👤"/>
+                                                                        <Setter Property="Foreground" Value="#64748B"/>
+                                                                        <Style.Triggers>
+                                                                            <DataTrigger Binding="{Binding}" Value="">
+                                                                                <Setter Property="Text" Value="—"/>
+                                                                                <Setter Property="Foreground" Value="#94A3B8"/>
+                                                                            </DataTrigger>
+                                                                        </Style.Triggers>
+                                                                    </Style>
+                                                                </TextBlock.Style>
+                                                            </TextBlock>
+                                                            <TextBlock FontSize="12" VerticalAlignment="Center">
+                                                                <TextBlock.Style>
+                                                                    <Style TargetType="TextBlock">
+                                                                        <Setter Property="Text" Value="{Binding}"/>
+                                                                        <Setter Property="Foreground" Value="#0F172A"/>
+                                                                        <Setter Property="FontWeight" Value="Medium"/>
+                                                                        <Style.Triggers>
+                                                                            <DataTrigger Binding="{Binding}" Value="">
+                                                                                <Setter Property="Text" Value="Unassigned"/>
+                                                                                <Setter Property="Foreground" Value="#94A3B8"/>
+                                                                                <Setter Property="FontStyle" Value="Italic"/>
+                                                                                <Setter Property="FontWeight" Value="Normal"/>
+                                                                            </DataTrigger>
+                                                                        </Style.Triggers>
+                                                                    </Style>
+                                                                </TextBlock.Style>
+                                                            </TextBlock>
+                                                        </StackPanel>
+                                                    </DataTemplate>
+                                                </ComboBox.ItemTemplate>
+                                            </ComboBox>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+
+                                <!-- 4. NOTES (Editable) -->
+                                <DataGridTemplateColumn Header="NOTES" Width="220" CanUserSort="True" SortMemberPath="Notes">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <TextBox Text="{Binding Notes, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                                                     Height="28" VerticalContentAlignment="Center"
+                                                     Padding="6,2" BorderBrush="#CBD5E1" BorderThickness="1"
+                                                     Background="White" FontSize="12"
+                                                     ToolTip="{Binding Notes}"/>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+
+                                <!-- 5. # OF CALL (Auto-incremented on Dial, Not editable) -->
+                                <DataGridTemplateColumn Header="# OF CALL" Width="95" CanUserSort="True" SortMemberPath="CallCount">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <Border Background="#F1F5F9" BorderBrush="#CBD5E1" BorderThickness="1" CornerRadius="5"
+                                                    Height="28" Width="48" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding CallCount}" 
+                                                           FontWeight="Bold" FontSize="12" Foreground="#0F172A"
+                                                           HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                           ToolTip="Total calls dialed to this lead (auto-increments upon calling)"/>
+                                            </Border>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+
+                                <!-- 6. CELL NUMBER (Editable with Zoom Call Button on Left) -->
+                                <DataGridTemplateColumn Header="CELL NUMBER" Width="180" CanUserSort="True" SortMemberPath="CellNumber">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <Grid VerticalAlignment="Center">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                </Grid.ColumnDefinitions>
+
+                                                <!-- Call Button: Dials number in Zoom & increments # of call -->
+                                                <Button Grid.Column="0"
+                                                        Command="{Binding DataContext.UserDashboard.CallLeadCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                        CommandParameter="{Binding}"
+                                                        Style="{StaticResource CallIconButtonStyle}"
+                                                        Margin="0,0,5,0"
+                                                        ToolTip="Call this number via Zoom Phone (auto-increments # OF CALL)">
+                                                    <Path Data="M3.654 1.328a.678.678 0 0 0-1.015-.063L1.605 2.3c-.483.484-.661 1.169-.45 1.77a17.6 17.6 0 0 0 4.168 6.608 17.6 17.6 0 0 0 6.608 4.168c.601.211 1.286.033 1.77-.45l1.034-1.034a.678.678 0 0 0-.063-1.015l-2.307-1.794a.68.68 0 0 0-.58-.122l-2.19.547a1.75 1.75 0 0 1-1.657-.459L5.482 8.062a1.75 1.75 0 0 1-.46-1.657l.548-2.19a.68.68 0 0 0-.122-.58z"
+                                                          Fill="White" Stretch="Uniform" Width="12" Height="12"/>
+                                                </Button>
+
+                                                <!-- Cell Number TextBox (Editable) -->
+                                                <TextBox Grid.Column="1"
+                                                         Text="{Binding CellNumber, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                                                         Height="28" VerticalContentAlignment="Center"
+                                                         Padding="6,2" BorderBrush="#CBD5E1" BorderThickness="1"
+                                                         Background="White" FontSize="12"
+                                                         ToolTip="{Binding CellNumber}"/>
+                                            </Grid>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+
+                                <!-- 7. BUSINESS NAME (Editable) -->
+                                <DataGridTemplateColumn Header="BUSINESS NAME" Width="220" CanUserSort="True" SortMemberPath="BusinessName">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <TextBox Text="{Binding BusinessName, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                                                     Height="28" VerticalContentAlignment="Center"
+                                                     Padding="6,2" BorderBrush="#CBD5E1" BorderThickness="1"
+                                                     Background="White" FontSize="12" FontWeight="SemiBold"
+                                                     ToolTip="{Binding BusinessName}"/>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+
+                                <!-- 8. TITLE -->
+                                <DataGridTextColumn Header="TITLE" Binding="{Binding Title}" Width="120" IsReadOnly="True"/>
+
+                                <!-- 9. CONTACT NAME (Editable) -->
+                                <DataGridTemplateColumn Header="CONTACT NAME" Width="170" CanUserSort="True" SortMemberPath="ContactName">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <TextBox Text="{Binding ContactName, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                                                     Height="28" VerticalContentAlignment="Center"
+                                                     Padding="6,2" BorderBrush="#CBD5E1" BorderThickness="1"
+                                                     Background="White" FontSize="12"
+                                                     ToolTip="{Binding ContactName}"/>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+
+                                <!-- 10. EMAIL -->
+                                <DataGridTextColumn Header="EMAIL" Binding="{Binding Email}" Width="170" IsReadOnly="True"/>
+
+                                <!-- 11. ADDRESS -->
+                                <DataGridTextColumn Header="ADDRESS" Binding="{Binding Address}" Width="190" IsReadOnly="True"/>
+
+                                <!-- 12. CITY -->
+                                <DataGridTextColumn Header="CITY" Binding="{Binding City}" Width="110" IsReadOnly="True"/>
+
+                                <!-- 13. COUNTY -->
+                                <DataGridTextColumn Header="COUNTY" Binding="{Binding County}" Width="110" IsReadOnly="True"/>
+
+                                <!-- 14. STATE -->
+                                <DataGridTextColumn Header="STATE" Binding="{Binding State}" Width="65" IsReadOnly="True"/>
+
+                                <!-- 15. ZIP CODE -->
+                                <DataGridTextColumn Header="ZIP CODE" Binding="{Binding ZipCode}" Width="85" IsReadOnly="True"/>
+
+                                <!-- 16. FAX -->
+                                <DataGridTextColumn Header="FAX" Binding="{Binding Fax}" Width="110" IsReadOnly="True"/>
+
+                                <!-- 17. ANNUAL SALES -->
+                                <DataGridTextColumn Header="ANNUAL SALES" Binding="{Binding AnnualSales}" Width="140" IsReadOnly="True"/>
+
+                                <!-- 18. NUMBER OF EMP -->
+                                <DataGridTextColumn Header="NUMBER OF EMP" Binding="{Binding NumberOfEmployees}" Width="115" IsReadOnly="True"/>
+
+                                <!-- 19. WEBSITE -->
+                                <DataGridTextColumn Header="WEBSITE" Binding="{Binding Website}" Width="160" IsReadOnly="True"/>
+
+                                <!-- 20. SIC CODE -->
+                                <DataGridTextColumn Header="SIC CODE" Binding="{Binding SicCode}" Width="95" IsReadOnly="True"/>
+
+                                <!-- 21. SIC DESCRIPTION -->
+                                <DataGridTextColumn Header="SIC DESCRIPTION" Binding="{Binding SicDescription}" Width="170" IsReadOnly="True"/>
+
+                                <!-- 22. NAICS CODE -->
+                                <DataGridTextColumn Header="NAICS CODE" Binding="{Binding NaicsCode}" Width="95" IsReadOnly="True"/>
+
+                                <!-- 23. NAICS DESCRIPTION -->
+                                <DataGridTextColumn Header="NAICS DESCRIPTION" Binding="{Binding NaicsDescription}" Width="170" IsReadOnly="True"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </Grid>
+
+                     
+                </Grid>
             </Grid>
         </Grid>
 
@@ -588,345 +966,6 @@
                             Style="{StaticResource DangerButtonStyle}"
                             Padding="22,7" FontSize="12" HorizontalAlignment="Center"/>
                 </StackPanel>
-            </Border>
-        </Border>
-
-        <!-- ===== FILE PREVIEW MODAL OVERLAY (IDENTICAL TABLE STRUCTURE & FEATURES TO ADMIN) ===== -->
-        <Border Grid.RowSpan="2"
-                Background="#770F172A"
-                Panel.ZIndex="40"
-                Visibility="{Binding UserDashboard.IsPreviewOpen, Converter={StaticResource BooleanToVisibilityConverter}}">
-            <Border Background="White" CornerRadius="12" Margin="32"
-                    BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
-                    VerticalAlignment="Stretch" HorizontalAlignment="Stretch">
-                <Border.Effect>
-                    <DropShadowEffect Color="#0F172A" BlurRadius="40" ShadowDepth="6" Direction="270" Opacity="0.14"/>
-                </Border.Effect>
-                <Grid>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>  <!-- Header -->
-                        <RowDefinition Height="Auto"/>  <!-- Search bar -->
-                        <RowDefinition Height="*"/>     <!-- Data table -->
-                        <RowDefinition Height="Auto"/>  <!-- Footer -->
-                    </Grid.RowDefinitions>
-
-                    <!-- Preview Header -->
-                    <Border Grid.Row="0" Background="#F8FAFC" CornerRadius="12,12,0,0"
-                            BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1"
-                            Padding="24,18">
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="0" Text="📄" FontSize="22" VerticalAlignment="Center" Margin="0,0,12,0"/>
-                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                <TextBlock Text="{Binding UserDashboard.PreviewTitle}" FontSize="16" FontWeight="Bold"
-                                           Foreground="{StaticResource TextPrimaryBrush}" TextTrimming="CharacterEllipsis"/>
-                                <TextBlock Text="{Binding UserDashboard.PreviewSubtitle}" FontSize="12"
-                                           Foreground="{StaticResource TextSecondaryBrush}" Margin="0,2,0,0"/>
-                            </StackPanel>
-                            <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-                                <Border Background="#ECFDF5" BorderBrush="#A7F3D0" BorderThickness="1" CornerRadius="8" Padding="8,3" Margin="0,0,12,0">
-                                    <TextBlock Text="⚡ Real-time Sync Active" FontSize="11" Foreground="#047857" FontWeight="SemiBold"/>
-                                </Border>
-                                <Button Command="{Binding UserDashboard.ClosePreviewCommand}"
-                                        Background="Transparent" BorderThickness="0" Cursor="Hand" Padding="8">
-                                    <TextBlock Text="✕" FontSize="14" Foreground="#94A3B8"/>
-                                </Button>
-                            </StackPanel>
-                        </Grid>
-                    </Border>
-
-                    <!-- Search Bar -->
-                    <Border Grid.Row="1" Padding="20,12" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1">
-                        <Grid>
-                            <TextBox Text="{Binding UserDashboard.PreviewSearchText, UpdateSourceTrigger=PropertyChanged}"
-                                     Style="{StaticResource ModernTextBoxStyle}"
-                                     Padding="36,9,12,9"/>
-                            <TextBlock Text="🔍" Foreground="#94A3B8" FontSize="13"
-                                       VerticalAlignment="Center" HorizontalAlignment="Left" Margin="12,0,0,0"
-                                       IsHitTestVisible="False"/>
-                            <TextBlock Text="Search business name, contact, phone, disposition, agent, notes…"
-                                       Foreground="#94A3B8" FontSize="13"
-                                       VerticalAlignment="Center" Margin="38,0,0,0"
-                                       IsHitTestVisible="False">
-                                <TextBlock.Style>
-                                    <Style TargetType="TextBlock">
-                                        <Setter Property="Visibility" Value="Collapsed"/>
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding UserDashboard.PreviewSearchText}" Value="">
-                                                <Setter Property="Visibility" Value="Visible"/>
-                                            </DataTrigger>
-                                            <DataTrigger Binding="{Binding UserDashboard.PreviewSearchText}" Value="{x:Null}">
-                                                <Setter Property="Visibility" Value="Visible"/>
-                                            </DataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </TextBlock.Style>
-                            </TextBlock>
-                        </Grid>
-                    </Border>
-
-                    <!-- Loading Preview Spinner -->
-                    <Border Grid.Row="2"
-                            Visibility="{Binding UserDashboard.IsLoadingPreview, Converter={StaticResource BooleanToVisibilityConverter}}"
-                            VerticalAlignment="Center" HorizontalAlignment="Center">
-                        <StackPanel>
-                            <TextBlock Text="⏳" FontSize="32" HorizontalAlignment="Center" Margin="0,0,0,10"/>
-                            <TextBlock Text="Loading leads data…" FontSize="13" Foreground="#64748B" HorizontalAlignment="Center"/>
-                        </StackPanel>
-                    </Border>
-
-                    <!-- Preview Data Grid (With Identical Columns and Features to Admin) -->
-                    <DataGrid Grid.Row="2"
-                              ItemsSource="{Binding UserDashboard.FilteredPreviewLeads}"
-                              AutoGenerateColumns="False"
-                              CanUserAddRows="False"
-                              CanUserDeleteRows="False"
-                              SelectionMode="Single"
-                              GridLinesVisibility="None"
-                              HorizontalGridLinesBrush="{x:Null}"
-                              VerticalGridLinesBrush="{x:Null}"
-                              Background="White"
-                              RowBackground="White"
-                              AlternatingRowBackground="#F8FAFC"
-                              BorderThickness="0"
-                              ColumnHeaderStyle="{StaticResource ModernDataGridColumnHeaderStyle}"
-                              RowStyle="{StaticResource ModernDataGridRowStyle}"
-                              CellStyle="{StaticResource CenteredCellStyle}"
-                              AlternationCount="2"
-                              RowHeight="40"
-                              EnableRowVirtualization="True"
-                              VirtualizingPanel.IsVirtualizing="True"
-                              VirtualizingPanel.VirtualizationMode="Standard"
-                              VerticalScrollBarVisibility="Auto"
-                              HorizontalScrollBarVisibility="Auto"
-                              Visibility="{Binding UserDashboard.IsLoadingPreview, Converter={StaticResource InverseBoolToVisibilityConverter}}">
-                        <DataGrid.Resources>
-                            <!-- Global cell text style: removes any underline and centers text vertically -->
-                            <Style TargetType="TextBlock">
-                                <Setter Property="VerticalAlignment" Value="Center"/>
-                                <Setter Property="TextDecorations" Value="{x:Null}"/>
-                            </Style>
-                        </DataGrid.Resources>
-                        <DataGrid.Columns>
-                            <!-- 1. DATE with Calendar Picker -->
-                            <DataGridTemplateColumn Header="DATE" Width="135" CanUserSort="True" SortMemberPath="SelectedDate">
-                                <DataGridTemplateColumn.CellTemplate>
-                                    <DataTemplate>
-                                        <DatePicker SelectedDate="{Binding SelectedDate, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                                     Height="28" VerticalAlignment="Center" VerticalContentAlignment="Center"
-                                                     BorderBrush="#CBD5E1" Background="White" Padding="4,1"
-                                                     ToolTip="Pick a date for this call"/>
-                                    </DataTemplate>
-                                </DataGridTemplateColumn.CellTemplate>
-                            </DataGridTemplateColumn>
-
-                            <!-- 2. CALL DISPOSITION Dropdown with Color Coding -->
-                            <DataGridTemplateColumn Header="CALL DISPOSITION" Width="190" CanUserSort="True" SortMemberPath="CallDisposition">
-                                <DataGridTemplateColumn.CellTemplate>
-                                    <DataTemplate>
-                                        <ComboBox ItemsSource="{Binding Source={x:Static models:CallDispositionHelper.Dispositions}}"
-                                                  SelectedValue="{Binding CallDisposition, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                                  SelectedValuePath="Name"
-                                                  Height="30" VerticalAlignment="Center"
-                                                  BorderBrush="#CBD5E1" Background="White">
-                                            <ComboBox.ItemTemplate>
-                                                <DataTemplate>
-                                                    <Border Background="{Binding BackgroundHex}"
-                                                            BorderBrush="{Binding BorderHex}"
-                                                            BorderThickness="1" CornerRadius="8"
-                                                            Padding="8,3" Margin="0,1" HorizontalAlignment="Stretch">
-                                                        <TextBlock Text="{Binding Name}"
-                                                                   Foreground="{Binding ForegroundHex}"
-                                                                   FontWeight="SemiBold" FontSize="11.5"/>
-                                                    </Border>
-                                                </DataTemplate>
-                                            </ComboBox.ItemTemplate>
-                                        </ComboBox>
-                                    </DataTemplate>
-                                </DataGridTemplateColumn.CellTemplate>
-                            </DataGridTemplateColumn>
-
-                            <!-- 3. AGENT Assigned Dropdown -->
-                            <DataGridTemplateColumn Header="AGENT" Width="150" CanUserSort="True" SortMemberPath="AssignedAgent">
-                                <DataGridTemplateColumn.CellTemplate>
-                                    <DataTemplate>
-                                        <ComboBox ItemsSource="{Binding AvailableAgentOptions}"
-                                                  SelectedItem="{Binding AssignedAgent, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                                  Height="30" VerticalAlignment="Center"
-                                                  BorderBrush="#CBD5E1" Background="White">
-                                            <ComboBox.ItemTemplate>
-                                                <DataTemplate>
-                                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                                        <TextBlock Text="👤 " FontSize="11" Foreground="#64748B"/>
-                                                        <TextBlock Text="{Binding}" FontSize="12" Foreground="#0F172A" FontWeight="Medium"/>
-                                                    </StackPanel>
-                                                </DataTemplate>
-                                            </ComboBox.ItemTemplate>
-                                        </ComboBox>
-                                    </DataTemplate>
-                                </DataGridTemplateColumn.CellTemplate>
-                            </DataGridTemplateColumn>
-
-                            <!-- 4. NOTES (Editable) -->
-                            <DataGridTemplateColumn Header="NOTES" Width="220" CanUserSort="True" SortMemberPath="Notes">
-                                <DataGridTemplateColumn.CellTemplate>
-                                    <DataTemplate>
-                                        <TextBox Text="{Binding Notes, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
-                                                 Height="28" VerticalContentAlignment="Center"
-                                                 Padding="6,2" BorderBrush="#CBD5E1" BorderThickness="1"
-                                                 Background="White" FontSize="12"
-                                                 ToolTip="{Binding Notes}"/>
-                                    </DataTemplate>
-                                </DataGridTemplateColumn.CellTemplate>
-                            </DataGridTemplateColumn>
-
-                            <!-- 5. # OF CALL (Auto-incremented on Dial, Not editable) -->
-                            <DataGridTemplateColumn Header="# OF CALL" Width="95" CanUserSort="True" SortMemberPath="CallCount">
-                                <DataGridTemplateColumn.CellTemplate>
-                                    <DataTemplate>
-                                        <Border Background="#F1F5F9" BorderBrush="#CBD5E1" BorderThickness="1" CornerRadius="5"
-                                                Height="28" Width="48" HorizontalAlignment="Center" VerticalAlignment="Center">
-                                            <TextBlock Text="{Binding CallCount}" 
-                                                       FontWeight="Bold" FontSize="12" Foreground="#0F172A"
-                                                       HorizontalAlignment="Center" VerticalAlignment="Center"
-                                                       ToolTip="Total calls dialed to this lead (auto-increments upon calling)"/>
-                                        </Border>
-                                    </DataTemplate>
-                                </DataGridTemplateColumn.CellTemplate>
-                            </DataGridTemplateColumn>
-
-                            <!-- 6. CELL NUMBER (Editable with Zoom Call Button on Left) -->
-                            <DataGridTemplateColumn Header="CELL NUMBER" Width="180" CanUserSort="True" SortMemberPath="CellNumber">
-                                <DataGridTemplateColumn.CellTemplate>
-                                    <DataTemplate>
-                                        <Grid VerticalAlignment="Center">
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="Auto"/>
-                                                <ColumnDefinition Width="*"/>
-                                            </Grid.ColumnDefinitions>
-
-                                            <!-- Call Button: Dials number in Zoom & increments # of call -->
-                                            <Button Grid.Column="0"
-                                                    Command="{Binding DataContext.UserDashboard.CallLeadCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                    CommandParameter="{Binding}"
-                                                    Style="{StaticResource CallIconButtonStyle}"
-                                                    Margin="0,0,5,0"
-                                                    ToolTip="Call this number via Zoom Phone (auto-increments # OF CALL)">
-                                                <Path Data="M3.654 1.328a.678.678 0 0 0-1.015-.063L1.605 2.3c-.483.484-.661 1.169-.45 1.77a17.6 17.6 0 0 0 4.168 6.608 17.6 17.6 0 0 0 6.608 4.168c.601.211 1.286.033 1.77-.45l1.034-1.034a.678.678 0 0 0-.063-1.015l-2.307-1.794a.68.68 0 0 0-.58-.122l-2.19.547a1.75 1.75 0 0 1-1.657-.459L5.482 8.062a1.75 1.75 0 0 1-.46-1.657l.548-2.19a.68.68 0 0 0-.122-.58z"
-                                                      Fill="White" Stretch="Uniform" Width="12" Height="12"/>
-                                            </Button>
-
-                                            <!-- Cell Number TextBox (Editable) -->
-                                            <TextBox Grid.Column="1"
-                                                     Text="{Binding CellNumber, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
-                                                     Height="28" VerticalContentAlignment="Center"
-                                                     Padding="6,2" BorderBrush="#CBD5E1" BorderThickness="1"
-                                                     Background="White" FontSize="12"
-                                                     ToolTip="{Binding CellNumber}"/>
-                                        </Grid>
-                                    </DataTemplate>
-                                </DataGridTemplateColumn.CellTemplate>
-                            </DataGridTemplateColumn>
-
-                            <!-- 7. BUSINESS NAME (Editable) -->
-                            <DataGridTemplateColumn Header="BUSINESS NAME" Width="220" CanUserSort="True" SortMemberPath="BusinessName">
-                                <DataGridTemplateColumn.CellTemplate>
-                                    <DataTemplate>
-                                        <TextBox Text="{Binding BusinessName, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
-                                                 Height="28" VerticalContentAlignment="Center"
-                                                 Padding="6,2" BorderBrush="#CBD5E1" BorderThickness="1"
-                                                 Background="White" FontSize="12" FontWeight="SemiBold"
-                                                 ToolTip="{Binding BusinessName}"/>
-                                    </DataTemplate>
-                                </DataGridTemplateColumn.CellTemplate>
-                            </DataGridTemplateColumn>
-
-                            <!-- 8. TITLE -->
-                            <DataGridTextColumn Header="TITLE" Binding="{Binding Title}" Width="120" IsReadOnly="True"/>
-
-                            <!-- 9. CONTACT NAME (Editable) -->
-                            <DataGridTemplateColumn Header="CONTACT NAME" Width="170" CanUserSort="True" SortMemberPath="ContactName">
-                                <DataGridTemplateColumn.CellTemplate>
-                                    <DataTemplate>
-                                        <TextBox Text="{Binding ContactName, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
-                                                 Height="28" VerticalContentAlignment="Center"
-                                                 Padding="6,2" BorderBrush="#CBD5E1" BorderThickness="1"
-                                                 Background="White" FontSize="12"
-                                                 ToolTip="{Binding ContactName}"/>
-                                    </DataTemplate>
-                                </DataGridTemplateColumn.CellTemplate>
-                            </DataGridTemplateColumn>
-
-                            <!-- 10. EMAIL -->
-                            <DataGridTextColumn Header="EMAIL" Binding="{Binding Email}" Width="170" IsReadOnly="True"/>
-
-                            <!-- 11. ADDRESS -->
-                            <DataGridTextColumn Header="ADDRESS" Binding="{Binding Address}" Width="190" IsReadOnly="True"/>
-
-                            <!-- 12. CITY -->
-                            <DataGridTextColumn Header="CITY" Binding="{Binding City}" Width="110" IsReadOnly="True"/>
-
-                            <!-- 13. COUNTY -->
-                            <DataGridTextColumn Header="COUNTY" Binding="{Binding County}" Width="110" IsReadOnly="True"/>
-
-                            <!-- 14. STATE -->
-                            <DataGridTextColumn Header="STATE" Binding="{Binding State}" Width="65" IsReadOnly="True"/>
-
-                            <!-- 15. ZIP CODE -->
-                            <DataGridTextColumn Header="ZIP CODE" Binding="{Binding ZipCode}" Width="85" IsReadOnly="True"/>
-
-                            <!-- 16. FAX -->
-                            <DataGridTextColumn Header="FAX" Binding="{Binding Fax}" Width="110" IsReadOnly="True"/>
-
-                            <!-- 17. ANNUAL SALES -->
-                            <DataGridTextColumn Header="ANNUAL SALES" Binding="{Binding AnnualSales}" Width="140" IsReadOnly="True"/>
-
-                            <!-- 18. NUMBER OF EMP -->
-                            <DataGridTextColumn Header="NUMBER OF EMP" Binding="{Binding NumberOfEmployees}" Width="115" IsReadOnly="True"/>
-
-                            <!-- 19. WEBSITE -->
-                            <DataGridTextColumn Header="WEBSITE" Binding="{Binding Website}" Width="160" IsReadOnly="True"/>
-
-                            <!-- 20. SIC CODE -->
-                            <DataGridTextColumn Header="SIC CODE" Binding="{Binding SicCode}" Width="95" IsReadOnly="True"/>
-
-                            <!-- 21. SIC DESCRIPTION -->
-                            <DataGridTextColumn Header="SIC DESCRIPTION" Binding="{Binding SicDescription}" Width="170" IsReadOnly="True"/>
-
-                            <!-- 22. NAICS CODE -->
-                            <DataGridTextColumn Header="NAICS CODE" Binding="{Binding NaicsCode}" Width="95" IsReadOnly="True"/>
-
-                            <!-- 23. NAICS DESCRIPTION -->
-                            <DataGridTextColumn Header="NAICS DESCRIPTION" Binding="{Binding NaicsDescription}" Width="170" IsReadOnly="True"/>
-                        </DataGrid.Columns>
-                    </DataGrid>
-
-                    <!-- Preview Footer -->
-                    <Border Grid.Row="3" Background="#F8FAFC" CornerRadius="0,0,12,12"
-                            BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,1,0,0"
-                            Padding="24,14">
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                                <TextBlock Text="Showing " FontSize="12" Foreground="{StaticResource TextSecondaryBrush}"/>
-                                <TextBlock Text="{Binding UserDashboard.FilteredPreviewLeads.Count, Mode=OneWay, StringFormat={}{0:N0}}"
-                                           FontSize="12" FontWeight="Bold" Foreground="{StaticResource TextPrimaryBrush}"/>
-                                <TextBlock Text=" leads" FontSize="12" Foreground="{StaticResource TextSecondaryBrush}"/>
-                            </StackPanel>
-                            <Button Grid.Column="1" Content="Close"
-                                    Command="{Binding UserDashboard.ClosePreviewCommand}"
-                                    Style="{StaticResource SecondaryButtonStyle}"
-                                    Padding="18,6" FontSize="12"/>
-                        </Grid>
-                    </Border>
-                </Grid>
             </Border>
         </Border>
 

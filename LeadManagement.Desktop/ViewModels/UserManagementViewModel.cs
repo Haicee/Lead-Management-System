@@ -12,6 +12,9 @@ namespace LeadManagement.Desktop.ViewModels
     public class UserManagementViewModel : BaseViewModel
     {
         private ObservableCollection<UserModel> _users = new();
+        private ObservableCollection<UserModel> _filteredUsers = new();
+        private string _searchText = string.Empty;
+        private string _selectedRoleFilter = "All Roles";
         private bool _isLoading = false;
 
         // ── Add Modal ──────────────────────────────────────────────────
@@ -52,9 +55,11 @@ namespace LeadManagement.Desktop.ViewModels
             UpdateUserCommand         = new RelayCommand(async () => await ExecuteUpdateUserAsync(), () => CanUpdateUser);
             DeleteUserCommand         = new RelayCommand<UserModel>(async (u) => await ExecuteDeleteUserAsync(u));
             DismissBannerCommand      = new RelayCommand(() => IsStatusBannerVisible = false);
+            ClearSearchCommand        = new RelayCommand(ExecuteClearSearch);
 
             AvailableRoles    = new ObservableCollection<string> { "User", "Admin" };
             AvailableStatuses = new ObservableCollection<string> { "Active", "Inactive" };
+            RoleFilters       = new ObservableCollection<string> { "All Roles", "Admins Only", "Agents Only" };
 
             _ = LoadUsersAsync();
         }
@@ -64,11 +69,99 @@ namespace LeadManagement.Desktop.ViewModels
         public ObservableCollection<UserModel> Users
         {
             get => _users;
-            set => SetProperty(ref _users, value);
+            set
+            {
+                if (SetProperty(ref _users, value))
+                {
+                    ApplyFilter();
+                    UpdateKpis();
+                }
+            }
+        }
+
+        public ObservableCollection<UserModel> FilteredUsers
+        {
+            get => _filteredUsers;
+            set => SetProperty(ref _filteredUsers, value);
         }
 
         public ObservableCollection<string> AvailableRoles { get; }
         public ObservableCollection<string> AvailableStatuses { get; }
+        public ObservableCollection<string> RoleFilters { get; }
+
+        public string SearchText
+        {
+            get => _searchText;
+            set
+            {
+                if (SetProperty(ref _searchText, value))
+                {
+                    ApplyFilter();
+                    OnPropertyChanged(nameof(HasSearchText));
+                }
+            }
+        }
+
+        public bool HasSearchText => !string.IsNullOrWhiteSpace(SearchText);
+
+        public string SelectedRoleFilter
+        {
+            get => _selectedRoleFilter;
+            set
+            {
+                if (SetProperty(ref _selectedRoleFilter, value))
+                    ApplyFilter();
+            }
+        }
+
+        public int TotalActive => Users.Count(u => u.IsActive == 1);
+        public int TotalInactive => Users.Count(u => u.IsActive != 1);
+
+        public string FilteredCountText => $"Showing {FilteredUsers.Count} of {TotalUsers} accounts";
+
+        public void ApplyFilter()
+        {
+            var query = Users.AsEnumerable();
+
+            if (!string.IsNullOrWhiteSpace(SearchText))
+            {
+                var term = SearchText.Trim();
+                query = query.Where(u =>
+                    (u.FullName != null && u.FullName.Contains(term, StringComparison.OrdinalIgnoreCase)) ||
+                    (u.Username != null && u.Username.Contains(term, StringComparison.OrdinalIgnoreCase)) ||
+                    (u.Email != null && u.Email.Contains(term, StringComparison.OrdinalIgnoreCase)) ||
+                    (u.Role != null && u.Role.Contains(term, StringComparison.OrdinalIgnoreCase)));
+            }
+
+            if (SelectedRoleFilter == "Admins Only")
+            {
+                query = query.Where(u => u.IsAdmin);
+            }
+            else if (SelectedRoleFilter == "Agents Only")
+            {
+                query = query.Where(u => !u.IsAdmin);
+            }
+
+            FilteredUsers = new ObservableCollection<UserModel>(query.ToList());
+            OnPropertyChanged(nameof(FilteredCountText));
+        }
+
+        private void ExecuteClearSearch()
+        {
+            SearchText = string.Empty;
+            SelectedRoleFilter = "All Roles";
+        }
+
+        private void UpdateKpis()
+        {
+            OnPropertyChanged(nameof(TotalUsers));
+            OnPropertyChanged(nameof(TotalAgents));
+            OnPropertyChanged(nameof(TotalAdmins));
+            OnPropertyChanged(nameof(TotalActive));
+            OnPropertyChanged(nameof(TotalInactive));
+            OnPropertyChanged(nameof(UserCountText));
+            OnPropertyChanged(nameof(FilteredCountText));
+        }
 
         // ── Counts / Header ────────────────────────────────────────────
 
@@ -91,7 +184,7 @@ namespace LeadManagement.Desktop.ViewModels
             get
             {
                 if (IsLoading) return "Loading accounts...";
-                return $"{TotalUsers} Registered Accounts ({TotalAdmins} Admin, {TotalAgents} Agents)";
+                return $"({TotalAdmins} Admin, {TotalAgents} Agents)";
             }
         }
 
@@ -249,6 +342,7 @@ namespace LeadManagement.Desktop.ViewModels
         public ICommand UpdateUserCommand         { get; }
         public ICommand DeleteUserCommand         { get; }
         public ICommand DismissBannerCommand      { get; }
+        public ICommand ClearSearchCommand        { get; }
 
         // ── Load ───────────────────────────────────────────────────────
 
@@ -265,10 +359,7 @@ namespace LeadManagement.Desktop.ViewModels
             finally
             {
                 IsLoading = false;
-                OnPropertyChanged(nameof(TotalUsers));
-                OnPropertyChanged(nameof(TotalAgents));
-                OnPropertyChanged(nameof(TotalAdmins));
-                OnPropertyChanged(nameof(UserCountText));
+                UpdateKpis();
             }
         }
 

@@ -315,6 +315,7 @@ namespace LeadManagement.Desktop.ViewModels
                     var prevExpandedIds = new HashSet<int>(_assignedClients.Where(c => c.IsExpanded).Select(c => c.Id));
                     foreach (var c in assigned)
                     {
+                        c.UpdateAssignedAgentNames();
                         if (prevExpandedIds.Contains(c.Id) || assigned.Count == 1)
                         {
                             c.IsExpanded = true;
@@ -368,8 +369,71 @@ namespace LeadManagement.Desktop.ViewModels
                 if (ok && data?.Leads != null)
                 {
                     _allPreviewLeads = data.Leads;
-                    var client = AssignedClients.FirstOrDefault(c => c.Id == file.ClientId);
-                    var agentNames = client?.AssignedAgentNames ?? new ObservableCollection<string> { AgentName };
+
+                    var targetClientId = file.ClientId > 0 ? file.ClientId : (data.ClientId > 0 ? data.ClientId : 0);
+                    var client = AssignedClients.FirstOrDefault(c => c.Id == targetClientId)
+                                 ?? AssignedClients.FirstOrDefault(c => c.FullName.Equals(file.ClientName, StringComparison.OrdinalIgnoreCase))
+                                 ?? AssignedClients.FirstOrDefault();
+
+                    // Ensure the client's assigned agents list is populated
+                    client?.UpdateAssignedAgentNames();
+
+                    // Build full list of agent options for this client
+                    var agentNames = new ObservableCollection<string> { "" }; // empty option for unassigned
+
+                    // 1. All agents assigned to this client
+                    if (client?.AssignedAgents != null && client.AssignedAgents.Count > 0)
+                    {
+                        foreach (var a in client.AssignedAgents)
+                        {
+                            var name = !string.IsNullOrWhiteSpace(a.FullName) ? a.FullName.Trim() : a.Username.Trim();
+                            if (!string.IsNullOrWhiteSpace(name) && !agentNames.Contains(name))
+                            {
+                                agentNames.Add(name);
+                            }
+                        }
+                    }
+
+                    if (client?.AssignedAgentNames != null)
+                    {
+                        foreach (var name in client.AssignedAgentNames)
+                        {
+                            if (!string.IsNullOrWhiteSpace(name) && !agentNames.Contains(name.Trim()))
+                            {
+                                agentNames.Add(name.Trim());
+                            }
+                        }
+                    }
+
+                    // 2. Ensure current agent is available to assign to themselves
+                    if (!string.IsNullOrWhiteSpace(AgentName) && !agentNames.Contains(AgentName.Trim()))
+                    {
+                        agentNames.Add(AgentName.Trim());
+                    }
+                    var currentFullName = ApiService.Instance.CurrentUser?.FullName?.Trim();
+                    if (!string.IsNullOrWhiteSpace(currentFullName) && !agentNames.Contains(currentFullName))
+                    {
+                        agentNames.Add(currentFullName);
+                    }
+                    var currentUsername = ApiService.Instance.CurrentUser?.Username?.Trim();
+                    if (!string.IsNullOrWhiteSpace(currentUsername) && !agentNames.Contains(currentUsername))
+                    {
+                        agentNames.Add(currentUsername);
+                    }
+
+                    // 3. Preserve any agent names already assigned to leads in this file
+                    foreach (var lead in _allPreviewLeads)
+                    {
+                        if (!string.IsNullOrWhiteSpace(lead.AssignedAgent) && !agentNames.Contains(lead.AssignedAgent.Trim()))
+                        {
+                            agentNames.Add(lead.AssignedAgent.Trim());
+                        }
+                    }
+
+                    if (client != null)
+                    {
+                        client.AssignedAgentNames = agentNames;
+                    }
 
                     foreach (var lead in _allPreviewLeads)
                     {

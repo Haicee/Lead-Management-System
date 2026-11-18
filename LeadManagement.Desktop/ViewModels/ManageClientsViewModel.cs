@@ -1151,8 +1151,50 @@ namespace LeadManagement.Desktop.ViewModels
                 if (ok && data?.Leads != null)
                 {
                     _allPreviewLeads = data.Leads;
-                    var client = Clients.FirstOrDefault(c => c.Id == file.ClientId);
-                    var agentNames = client?.AssignedAgentNames ?? new ObservableCollection<string> { "" };
+
+                    var targetClientId = file.ClientId > 0 ? file.ClientId : (data.ClientId > 0 ? data.ClientId : 0);
+                    var client = Clients.FirstOrDefault(c => c.Id == targetClientId)
+                                 ?? Clients.FirstOrDefault(c => c.FullName.Equals(file.ClientName, StringComparison.OrdinalIgnoreCase));
+
+                    client?.UpdateAssignedAgentNames();
+
+                    var agentNames = new ObservableCollection<string> { "" };
+
+                    if (client?.AssignedAgents != null && client.AssignedAgents.Count > 0)
+                    {
+                        foreach (var a in client.AssignedAgents)
+                        {
+                            var name = !string.IsNullOrWhiteSpace(a.FullName) ? a.FullName.Trim() : a.Username.Trim();
+                            if (!string.IsNullOrWhiteSpace(name) && !agentNames.Contains(name))
+                            {
+                                agentNames.Add(name);
+                            }
+                        }
+                    }
+
+                    if (client?.AssignedAgentNames != null)
+                    {
+                        foreach (var name in client.AssignedAgentNames)
+                        {
+                            if (!string.IsNullOrWhiteSpace(name) && !agentNames.Contains(name.Trim()))
+                            {
+                                agentNames.Add(name.Trim());
+                            }
+                        }
+                    }
+
+                    foreach (var lead in _allPreviewLeads)
+                    {
+                        if (!string.IsNullOrWhiteSpace(lead.AssignedAgent) && !agentNames.Contains(lead.AssignedAgent.Trim()))
+                        {
+                            agentNames.Add(lead.AssignedAgent.Trim());
+                        }
+                    }
+
+                    if (client != null)
+                    {
+                        client.AssignedAgentNames = agentNames;
+                    }
 
                     foreach (var lead in _allPreviewLeads)
                     {

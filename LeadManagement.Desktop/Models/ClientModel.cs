@@ -100,7 +100,52 @@ namespace LeadManagement.Desktop.Models
         public List<UserModel> AssignedAgents
         {
             get => _assignedAgents;
-            set => SetProperty(ref _assignedAgents, value);
+            set
+            {
+                if (SetProperty(ref _assignedAgents, value))
+                {
+                    UpdateAssignedAgentNames();
+                }
+            }
+        }
+
+        public void UpdateAssignedAgentNames()
+        {
+            var names = new ObservableCollection<string> { "" };
+            if (_assignedAgents != null)
+            {
+                foreach (var a in _assignedAgents)
+                {
+                    var name = !string.IsNullOrWhiteSpace(a.FullName) ? a.FullName.Trim() : a.Username.Trim();
+                    if (!string.IsNullOrWhiteSpace(name) && !names.Contains(name))
+                    {
+                        names.Add(name);
+                    }
+                }
+            }
+            AssignedAgentNames = names;
+            OnPropertyChanged(nameof(AssignedAgentsDisplay));
+        }
+
+        [JsonIgnore]
+        public string AssignedAgentsDisplay
+        {
+            get
+            {
+                if (_assignedAgents == null || _assignedAgents.Count == 0)
+                    return "No assigned agents";
+
+                var names = new List<string>();
+                foreach (var a in _assignedAgents)
+                {
+                    var name = !string.IsNullOrWhiteSpace(a.FullName) ? a.FullName.Trim() : a.Username.Trim();
+                    if (!string.IsNullOrWhiteSpace(name) && !names.Contains(name))
+                    {
+                        names.Add(name);
+                    }
+                }
+                return names.Count > 0 ? string.Join(", ", names) : "No assigned agents";
+            }
         }
 
         [JsonPropertyName("script_name")]

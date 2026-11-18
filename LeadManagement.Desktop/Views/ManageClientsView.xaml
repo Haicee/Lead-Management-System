@@ -301,82 +301,103 @@
             </Border>
         </Border>
 
-        <!-- ===== FILE PREVIEW MODAL OVERLAY ===== -->
-        <Border Background="#770F172A"
-                Panel.ZIndex="40"
-                Visibility="{Binding IsPreviewOpen, Converter={StaticResource BooleanToVisibilityConverter}}">
-            <Border Background="White" CornerRadius="12" Margin="32"
-                    BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
-                    VerticalAlignment="Stretch" HorizontalAlignment="Stretch">
-                <Border.Effect>
-                    <DropShadowEffect Color="#0F172A" BlurRadius="40" ShadowDepth="6" Direction="270" Opacity="0.14"/>
-                </Border.Effect>
+        <!-- ===== PAGE 2: FULL LEAD FILE VIEW (NEXT PAGE WITH UPPER-LEFT BACK BUTTON) ===== -->
+        <Grid Visibility="{Binding IsPreviewOpen, Converter={StaticResource BooleanToVisibilityConverter}}"
+              Background="White">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>  <!-- Header -->
+                <RowDefinition Height="Auto"/>  <!-- Search bar -->
+                <RowDefinition Height="*"/>     <!-- Data table -->
+                <RowDefinition Height="Auto"/>  <!-- Footer -->
+            </Grid.RowDefinitions>
+
+            <!-- ROW 0: HEADER BAR WITH UPPER-LEFT BACK BUTTON -->
+            <Border Grid.Row="0" Background="White" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1" Padding="24,14">
                 <Grid>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>  <!-- Header -->
-                        <RowDefinition Height="Auto"/>  <!-- Search bar -->
-                        <RowDefinition Height="*"/>     <!-- Data table -->
-                        <RowDefinition Height="Auto"/>  <!-- Footer -->
-                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/> <!-- Back button -->
+                        <ColumnDefinition Width="*"/>    <!-- File title & meta -->
+                        <ColumnDefinition Width="Auto"/> <!-- Status badge & Actions -->
+                    </Grid.ColumnDefinitions>
 
-                    <!-- Preview Header -->
-                    <Border Grid.Row="0" Background="#F8FAFC" CornerRadius="12,12,0,0"
-                            BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1"
-                            Padding="24,18">
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="0" Text="📄" FontSize="22" VerticalAlignment="Center" Margin="0,0,12,0"/>
-                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                <TextBlock Text="{Binding PreviewTitle}" FontSize="16" FontWeight="Bold"
-                                           Foreground="{StaticResource TextPrimaryBrush}" TextTrimming="CharacterEllipsis"/>
-                                <TextBlock Text="{Binding PreviewSubtitle}" FontSize="12"
-                                           Foreground="{StaticResource TextSecondaryBrush}" Margin="0,2,0,0"/>
-                            </StackPanel>
-                            <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-                                <Border Background="#ECFDF5" BorderBrush="#A7F3D0" BorderThickness="1" CornerRadius="8" Padding="8,3" Margin="0,0,12,0">
-                                    <TextBlock Text="⚡ Real-time Sync Active" FontSize="11" Foreground="#047857" FontWeight="SemiBold"/>
-                                </Border>
-                                <Button Command="{Binding ClosePreviewCommand}"
-                                        Background="Transparent" BorderThickness="0" Cursor="Hand" Padding="8">
-                                    <TextBlock Text="✕" FontSize="14" Foreground="#94A3B8"/>
-                                </Button>
-                            </StackPanel>
-                        </Grid>
-                    </Border>
+                    <!-- Upper Left Back Button -->
+                    <Button Grid.Column="0"
+                            Command="{Binding ClosePreviewCommand}"
+                            Style="{StaticResource SecondaryButtonStyle}"
+                            Padding="14,8"
+                            Margin="0,0,18,0"
+                            VerticalAlignment="Center"
+                            ToolTip="Return to Clients list">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="←" FontSize="15" FontWeight="Bold" Margin="0,0,8,0" VerticalAlignment="Center" Foreground="{StaticResource PrimaryBrush}"/>
+                            <TextBlock Text="Back" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
 
-                    <!-- Search Bar -->
-                    <Border Grid.Row="1" Padding="20,12" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1">
-                        <Grid>
-                            <TextBox Text="{Binding PreviewSearchText, UpdateSourceTrigger=PropertyChanged}"
-                                     Style="{StaticResource ModernTextBoxStyle}"
-                                     Padding="36,9,12,9"/>
-                            <TextBlock Text="🔍" Foreground="#94A3B8" FontSize="13"
-                                       VerticalAlignment="Center" HorizontalAlignment="Left" Margin="12,0,0,0"
-                                       IsHitTestVisible="False"/>
-                            <TextBlock Text="Search business name, contact, phone, disposition, agent, notes…"
-                                       Foreground="#94A3B8" FontSize="13"
-                                       VerticalAlignment="Center" Margin="38,0,0,0"
-                                       IsHitTestVisible="False">
-                                <TextBlock.Style>
-                                    <Style TargetType="TextBlock">
-                                        <Setter Property="Visibility" Value="Collapsed"/>
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding PreviewSearchText}" Value="">
-                                                <Setter Property="Visibility" Value="Visible"/>
-                                            </DataTrigger>
-                                            <DataTrigger Binding="{Binding PreviewSearchText}" Value="{x:Null}">
-                                                <Setter Property="Visibility" Value="Visible"/>
-                                            </DataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </TextBlock.Style>
-                            </TextBlock>
-                        </Grid>
-                    </Border>
+                    <!-- Title & Subtitle -->
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                             
+                            <TextBlock Text="{Binding PreviewTitle}" FontSize="18" FontWeight="Bold"
+                                       Foreground="{StaticResource TextPrimaryBrush}" TextTrimming="CharacterEllipsis"/>
+                        </StackPanel>
+                        <TextBlock Text="{Binding PreviewSubtitle}" FontSize="12.5"
+                                   Foreground="{StaticResource TextSecondaryBrush}" Margin="0,3,0,0"/>
+                    </StackPanel>
+ 
+                </Grid>
+            </Border>
+
+            <!-- ROW 1: SEARCH & FILTER TOOLBAR -->
+            <Border Grid.Row="1" Background="#F8FAFC" Padding="24,12" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+
+                    <!-- Instant Search Box -->
+                    <Grid Grid.Column="1" MaxWidth="780" HorizontalAlignment="Right" VerticalAlignment="Center">
+                        <TextBox Text="{Binding PreviewSearchText, UpdateSourceTrigger=PropertyChanged}"
+                                 Style="{StaticResource ModernTextBoxStyle}"
+                                 Padding="38,0,12,0"
+                                 Width="480"
+                                 Height="40"/>
+                        <TextBlock Text="🔍" Foreground="#94A3B8" FontSize="13"
+                                   VerticalAlignment="Center" HorizontalAlignment="Left" Margin="12,0,0,0"
+                                   IsHitTestVisible="False"/>
+                        <TextBlock Text="Search business name, contact, phone, disposition, agent, notes…"
+                                   Foreground="#94A3B8" FontSize="12"
+                                   VerticalAlignment="Center" Margin="38,0,0,0"
+                                   IsHitTestVisible="False">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding PreviewSearchText}" Value="">
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding PreviewSearchText}" Value="{x:Null}">
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                    </Grid>
+
+                    <!-- Quick Total Leads Chip -->
+                    <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                        <Border Background="White" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="8" Padding="12,6">
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <TextBlock Text="📊 Total Leads: " FontSize="12" Foreground="{StaticResource TextSecondaryBrush}"/>
+                                <TextBlock Text="{Binding FilteredPreviewLeads.Count, Mode=OneWay, StringFormat={}{0:N0}}"
+                                           FontSize="12" FontWeight="Bold" Foreground="{StaticResource TextPrimaryBrush}"/>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </Grid>
+            </Border>
 
                     <!-- Loading Preview Spinner -->
                     <Border Grid.Row="2"
@@ -470,8 +491,37 @@
                                             <ComboBox.ItemTemplate>
                                                 <DataTemplate>
                                                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                                        <TextBlock Text="👤 " FontSize="11" Foreground="#64748B"/>
-                                                        <TextBlock Text="{Binding}" FontSize="12" Foreground="#0F172A" FontWeight="Medium"/>
+                                                        <TextBlock FontSize="11" Margin="0,0,5,0" VerticalAlignment="Center">
+                                                            <TextBlock.Style>
+                                                                <Style TargetType="TextBlock">
+                                                                    <Setter Property="Text" Value="👤"/>
+                                                                    <Setter Property="Foreground" Value="#64748B"/>
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding}" Value="">
+                                                                            <Setter Property="Text" Value="—"/>
+                                                                            <Setter Property="Foreground" Value="#94A3B8"/>
+                                                                        </DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </TextBlock.Style>
+                                                        </TextBlock>
+                                                        <TextBlock FontSize="12" VerticalAlignment="Center">
+                                                            <TextBlock.Style>
+                                                                <Style TargetType="TextBlock">
+                                                                    <Setter Property="Text" Value="{Binding}"/>
+                                                                    <Setter Property="Foreground" Value="#0F172A"/>
+                                                                    <Setter Property="FontWeight" Value="Medium"/>
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding}" Value="">
+                                                                            <Setter Property="Text" Value="Unassigned"/>
+                                                                            <Setter Property="Foreground" Value="#94A3B8"/>
+                                                                            <Setter Property="FontStyle" Value="Italic"/>
+                                                                            <Setter Property="FontWeight" Value="Normal"/>
+                                                                        </DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </TextBlock.Style>
+                                                        </TextBlock>
                                                     </StackPanel>
                                                 </DataTemplate>
                                             </ComboBox.ItemTemplate>
@@ -713,29 +763,30 @@
                         </DataGrid.Columns>
                     </DataGrid>
 
-                    <!-- Footer -->
-                    <Border Grid.Row="3" Background="#F8FAFC" CornerRadius="0,0,12,12"
-                            BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,1,0,0"
-                            Padding="20,12">
+                    <!-- ROW 3: FOOTER BAR -->
+                    <Border Grid.Row="3" Background="#F8FAFC" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,1,0,0"
+                            Padding="24,12">
                         <Grid>
-                            <TextBlock VerticalAlignment="Center" FontSize="12" Foreground="{StaticResource TextSecondaryBrush}">
-                                <Run Text="Showing "/>
-                                <Run Text="{Binding FilteredPreviewLeads.Count, Mode=OneWay}" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}"/>
-                                <Run Text=" of "/>
-                                <Run Text="{Binding PreviewSubtitle, Mode=OneWay}"/>
-                            </TextBlock>
-                            <Button HorizontalAlignment="Right"
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                                <TextBlock Text="Showing " FontSize="12.5" Foreground="{StaticResource TextSecondaryBrush}"/>
+                                <TextBlock Text="{Binding FilteredPreviewLeads.Count, Mode=OneWay, StringFormat={}{0:N0}}"
+                                           FontSize="12.5" FontWeight="Bold" Foreground="{StaticResource TextPrimaryBrush}"/>
+                                <TextBlock Text=" leads" FontSize="12.5" Foreground="{StaticResource TextSecondaryBrush}"/>
+                            </StackPanel>
+                            <Button Grid.Column="1"
                                     Command="{Binding ClosePreviewCommand}"
                                     Style="{StaticResource SecondaryButtonStyle}"
-                                    Content="Close" Padding="16,7"/>
+                                    Content="← Back to Clients" Padding="16,6" FontSize="12"/>
                         </Grid>
                     </Border>
                 </Grid>
-            </Border>
-        </Border>
 
-        <!-- ===== MAIN CONTENT ===== -->
-        <Grid Margin="24,20,24,20">
+        <!-- ===== PAGE 1: CLIENTS MANAGEMENT LIST ===== -->
+        <Grid Margin="24,20,24,20" Visibility="{Binding IsPreviewOpen, Converter={StaticResource InverseBoolToVisibilityConverter}}">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>  <!-- Page Header -->
                 <RowDefinition Height="Auto"/>  <!-- Status Banner -->
