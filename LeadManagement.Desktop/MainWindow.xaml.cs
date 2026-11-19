@@ -1,4 +1,4 @@
-﻿using System.Text;
+using System.Text;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
@@ -28,7 +28,10 @@ namespace LeadManagement.Desktop
 
         private void DashboardView_Loaded(object sender, RoutedEventArgs e)
         {
-
+            if (DataContext is ViewModels.MainViewModel vm && vm.IsLoggedIn && vm.IsAdmin)
+            {
+                _ = vm.LoadDashboardStatsAsync();
+            }
         }
     }
 }

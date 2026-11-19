@@ -125,6 +125,12 @@ namespace LeadManagement.Desktop.Models
         [JsonPropertyName("industries")]
         public List<string>? Industries { get; set; }
 
+        [JsonPropertyName("sic_codes")]
+        public List<string>? SicCodes { get; set; }
+
+        [JsonPropertyName("sic_descriptions")]
+        public List<string>? SicDescriptions { get; set; }
+
         [JsonPropertyName("annual_sales")]
         public List<string>? AnnualSales { get; set; }
 
@@ -151,6 +157,12 @@ namespace LeadManagement.Desktop.Models
 
         [JsonPropertyName("industries")]
         public List<string> Industries { get; set; } = new();
+
+        [JsonPropertyName("sic_codes")]
+        public List<string> SicCodes { get; set; } = new();
+
+        [JsonPropertyName("sic_descriptions")]
+        public List<string> SicDescriptions { get; set; } = new();
 
         [JsonPropertyName("annual_sales")]
         public List<string> AnnualSales { get; set; } = new();

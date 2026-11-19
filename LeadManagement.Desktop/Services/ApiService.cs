@@ -792,6 +792,66 @@ namespace LeadManagement.Desktop.Services
             catch (Exception ex) { return (false, $"Error deleting client: {ex.Message}"); }
         }
 
+        /// <summary>
+        /// Retrieves live system summary metrics (total leads, clients, users) and the latest 10 admin activities.
+        /// </summary>
+        public async Task<(bool Success, string Message, DashboardStatsData? Data)> GetDashboardStatsAsync()
+        {
+            try
+            {
+                var response = await _httpClient.GetAsync("dashboard/stats");
+                var responseBody = await response.Content.ReadAsStringAsync();
+                var result = JsonSerializer.Deserialize<ApiResponse<DashboardStatsData>>(responseBody);
+
+                if (result == null)
+                {
+                    return (false, "Unable to parse server response.", null);
+                }
+
+                return (result.Success, result.Message, result.Data);
+            }
+            catch (HttpRequestException)
+            {
+                return (false, "Cannot connect to server. Please ensure XAMPP Apache & MySQL are running.", null);
+            }
+            catch (Exception ex)
+            {
+                return (false, $"Error fetching dashboard stats: {ex.Message}", null);
+            }
+        }
+
+        /// <summary>
+        /// Logs an admin activity to the central audit log (auto-pruned to 10 entries in backend database).
+        /// </summary>
+        public async Task<(bool Success, string Message)> LogActivityAsync(string actionType, string title, string description, int? itemCount = null)
+        {
+            try
+            {
+                var payload = new
+                {
+                    action_type = actionType,
+                    title = title,
+                    description = description,
+                    item_count = itemCount,
+                    admin_id = CurrentUser?.Id,
+                    admin_name = !string.IsNullOrWhiteSpace(CurrentUser?.FullName) ? CurrentUser.FullName : CurrentUser?.Username ?? "System Administrator"
+                };
+
+                var json = JsonSerializer.Serialize(payload);
+                var content = new StringContent(json, Encoding.UTF8, "application/json");
+                var response = await _httpClient.PostAsync("activities", content);
+                var responseBody = await response.Content.ReadAsStringAsync();
+                var result = JsonSerializer.Deserialize<ApiResponse<object>>(responseBody);
+
+                if (result == null) return (false, "Unable to parse response.");
+                return (result.Success, result.Message);
+            }
+            catch (Exception ex)
+            {
+                return (false, $"Error logging activity: {ex.Message}");
+            }
+        }
+
         public void Logout()
         {
             AuthToken = null;

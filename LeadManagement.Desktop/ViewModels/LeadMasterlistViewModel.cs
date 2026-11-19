@@ -182,7 +182,9 @@ namespace LeadManagement.Desktop.ViewModels
         public ObservableCollection<FilterItem> CityItems { get; } = new();
         public ObservableCollection<FilterItem> CountyItems { get; } = new();
         public ObservableCollection<FilterItem> StateItems { get; } = new();
-        public ObservableCollection<FilterItem> IndustryItems { get; } = new();
+        public ObservableCollection<FilterItem> SicCodeItems { get; } = new();
+        public ObservableCollection<FilterItem> SicDescItems { get; } = new();
+        public ObservableCollection<FilterItem> IndustryItems => SicDescItems; // Backward compatibility alias
         public ObservableCollection<FilterItem> AnnualSalesItems { get; } = new();
         public ObservableCollection<FilterItem> NaicsCodeItems { get; } = new();
         public ObservableCollection<FilterItem> NaicsDescItems { get; } = new();
@@ -207,7 +209,8 @@ namespace LeadManagement.Desktop.ViewModels
             CityItems.Any(i => i.IsSelected) ||
             CountyItems.Any(i => i.IsSelected) ||
             StateItems.Any(i => i.IsSelected) ||
-            IndustryItems.Any(i => i.IsSelected) ||
+            SicCodeItems.Any(i => i.IsSelected) ||
+            SicDescItems.Any(i => i.IsSelected) ||
             AnnualSalesItems.Any(i => i.IsSelected) ||
             NaicsCodeItems.Any(i => i.IsSelected) ||
             NaicsDescItems.Any(i => i.IsSelected) ||
@@ -381,7 +384,8 @@ namespace LeadManagement.Desktop.ViewModels
             var counties = GetSelected(CountyItems);
             var states = GetSelected(StateItems);
             var statuses = GetSelected(StatusItems);
-            var industries = GetSelected(IndustryItems);
+            var sicCodes = GetSelected(SicCodeItems);
+            var sicDescs = GetSelected(SicDescItems);
             var annualSales = GetSelected(AnnualSalesItems);
             var naicsCodes = GetSelected(NaicsCodeItems);
             var naicsDescs = GetSelected(NaicsDescItems);
@@ -397,7 +401,8 @@ namespace LeadManagement.Desktop.ViewModels
                 Counties = counties.Count > 0 ? counties : null,
                 States = states.Count > 0 ? states : null,
                 Statuses = statuses.Count > 0 ? statuses : null,
-                Industries = industries.Count > 0 ? industries : null,
+                SicCodes = sicCodes.Count > 0 ? sicCodes : null,
+                SicDescriptions = sicDescs.Count > 0 ? sicDescs : null,
                 AnnualSales = annualSales.Count > 0 ? annualSales : null,
                 NaicsCodes = naicsCodes.Count > 0 ? naicsCodes : null,
                 NaicsDescriptions = naicsDescs.Count > 0 ? naicsDescs : null
@@ -431,7 +436,8 @@ namespace LeadManagement.Desktop.ViewModels
                 foreach (var item in CityItems) item.IsSelected = false;
                 foreach (var item in CountyItems) item.IsSelected = false;
                 foreach (var item in StateItems) item.IsSelected = false;
-                foreach (var item in IndustryItems) item.IsSelected = false;
+                foreach (var item in SicCodeItems) item.IsSelected = false;
+                foreach (var item in SicDescItems) item.IsSelected = false;
                 foreach (var item in AnnualSalesItems) item.IsSelected = false;
                 foreach (var item in NaicsCodeItems) item.IsSelected = false;
                 foreach (var item in NaicsDescItems) item.IsSelected = false;
@@ -472,7 +478,8 @@ namespace LeadManagement.Desktop.ViewModels
                 LoadItems(CityItems, filters.Cities);
                 LoadItems(CountyItems, filters.Counties);
                 LoadItems(StateItems, filters.States);
-                LoadItems(IndustryItems, filters.Industries);
+                LoadItems(SicCodeItems, filters.SicCodes);
+                LoadItems(SicDescItems, filters.SicDescriptions);
                 LoadItems(AnnualSalesItems, filters.AnnualSales);
                 LoadItems(NaicsCodeItems, filters.NaicsCodes);
                 LoadItems(NaicsDescItems, filters.NaicsDescriptions);
@@ -660,6 +667,13 @@ namespace LeadManagement.Desktop.ViewModels
                     worksheet.Columns().AdjustToContents();
                     workbook.SaveAs(savePath);
                 }, token);
+
+                _ = ApiService.Instance.LogActivityAsync(
+                    "EXPORT",
+                    "Exported Leads",
+                    $"Exported {leadsToExport.Count:N0} leads to Excel ({System.IO.Path.GetFileName(savePath)})",
+                    leadsToExport.Count
+                );
 
                 MessageBox.Show(
                     $"Successfully exported {leadsToExport.Count:N0} leads to Excel!\n\nSaved to: {savePath}",

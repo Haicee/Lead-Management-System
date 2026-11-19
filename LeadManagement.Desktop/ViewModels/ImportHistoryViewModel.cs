@@ -544,6 +544,13 @@ namespace LeadManagement.Desktop.ViewModels
                     workbook.SaveAs(savePath);
                 }, token);
 
+                _ = ApiService.Instance.LogActivityAsync(
+                    "EXPORT",
+                    "Exported Leads",
+                    $"Exported {leadsToExport.Count:N0} leads from batch '{batch.BatchName}' to Excel ({Path.GetFileName(savePath)})",
+                    leadsToExport.Count
+                );
+
                 MessageBox.Show(
                     $"Successfully exported batch '{batch.BatchName}' ({leadsToExport.Count:N0} leads) to Excel!\n\nSaved to: {savePath}",
                     "Batch Export Complete",

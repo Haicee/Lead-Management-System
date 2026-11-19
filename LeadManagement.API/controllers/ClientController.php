@@ -5,6 +5,8 @@
  * Manages Client records, uploaded files per client, and agent assignments.
  */
 
+require_once __DIR__ . '/../core/ActivityLogger.php';
+
 class ClientController
 {
     private PDO $db;
@@ -101,6 +103,12 @@ class ClientController
         $newId = (int) $this->db->lastInsertId();
 
         $fullName = trim($firstName . ' ' . $lastName);
+
+        ActivityLogger::log(
+            'CLIENT_MANAGE',
+            'Added Client',
+            "Added new client '{$fullName}'"
+        );
 
         Response::success([
             'id'              => $newId,
@@ -233,6 +241,13 @@ class ClientController
 
             $this->db->commit();
 
+            ActivityLogger::log(
+                'CLIENT_MANAGE',
+                'Uploaded Client File',
+                "Uploaded " . number_format($inserted) . " leads ('{$fileName}') to client '{$clientName}'",
+                $inserted
+            );
+
             Response::success([
                 'id'          => $fileId,
                 'client_id'   => $clientId,
@@ -318,6 +333,11 @@ class ClientController
             Response::error('Invalid client ID.', 422);
         }
 
+        $stmtClient = $this->db->prepare("SELECT first_name, last_name FROM `clients` WHERE id = ?");
+        $stmtClient->execute([$clientId]);
+        $client = $stmtClient->fetch();
+        $clientName = $client ? trim($client['first_name'] . ' ' . $client['last_name']) : "Client #{$clientId}";
+
         try {
             $this->db->beginTransaction();
 
@@ -346,6 +366,12 @@ class ClientController
             $stmt->execute([$clientId]);
 
             $this->db->commit();
+
+            ActivityLogger::log(
+                'CLIENT_MANAGE',
+                'Deleted Client',
+                "Deleted client '{$clientName}'"
+            );
 
             Response::success(['id' => $clientId], 'Client and all associated files deleted successfully.');
         } catch (Exception $e) {
@@ -401,6 +427,13 @@ class ClientController
             $delFile->execute([$fileId]);
 
             $this->db->commit();
+
+            ActivityLogger::log(
+                'DELETE_LEADS',
+                'Deleted Client File Leads',
+                "Deleted " . number_format($deletedLeads) . " leads from file '{$file['file_name']}' (Client: {$file['client_name']})",
+                $deletedLeads
+            );
 
             Response::success([
                 'id'            => $fileId,

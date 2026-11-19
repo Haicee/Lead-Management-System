@@ -1,4 +1,8 @@
+using System;
+using System.Collections.ObjectModel;
+using System.Threading.Tasks;
 using System.Windows.Input;
+using LeadManagement.Desktop.Models;
 using LeadManagement.Desktop.Services;
 
 namespace LeadManagement.Desktop.ViewModels
@@ -15,11 +19,12 @@ namespace LeadManagement.Desktop.ViewModels
         private string _activeUserDisplay = string.Empty;
         private string _activeUserRole = string.Empty;
 
-        // Dashboard Placeholder Summary Metrics
-        private string _totalLeads = "1,280";
-        private string _newLeads = "+142";
-        private string _qualifiedLeads = "486";
-        private string _conversionRate = "24.5%";
+        // Dashboard Live Summary Metrics (Total Leads, Total Clients, Total Users)
+        private string _totalLeads = "0";
+        private string _totalClients = "0";
+        private string _totalUsers = "0";
+        private bool _isLoadingDashboard = false;
+        private ObservableCollection<AdminActivityModel> _adminActivities = new();
 
         public MainViewModel()
         {
@@ -28,6 +33,7 @@ namespace LeadManagement.Desktop.ViewModels
             LogoutCommand = new RelayCommand(ExecuteLogout);
             NavigateCommand = new RelayCommand(ExecuteNavigate);
             ToggleSidebarCommand = new RelayCommand(ExecuteToggleSidebar);
+            RefreshDashboardCommand = new RelayCommand(async () => await LoadDashboardStatsAsync());
         }
 
         public string AppTitle => "Leads Management System";
@@ -189,30 +195,38 @@ namespace LeadManagement.Desktop.ViewModels
         public bool IsUserManagementActive => CurrentView == "UserManagement";
         public bool IsSettingsActive => CurrentView == "Settings";
 
-        // Metric Card Properties
+        // Metric Card Properties (Total Leads, Total Clients, Total Users)
         public string TotalLeads
         {
             get => _totalLeads;
             set => SetProperty(ref _totalLeads, value);
         }
 
-        public string NewLeads
+        public string TotalClients
         {
-            get => _newLeads;
-            set => SetProperty(ref _newLeads, value);
+            get => _totalClients;
+            set => SetProperty(ref _totalClients, value);
         }
 
-        public string QualifiedLeads
+        public string TotalUsers
         {
-            get => _qualifiedLeads;
-            set => SetProperty(ref _qualifiedLeads, value);
+            get => _totalUsers;
+            set => SetProperty(ref _totalUsers, value);
         }
 
-        public string ConversionRate
+        public bool IsLoadingDashboard
         {
-            get => _conversionRate;
-            set => SetProperty(ref _conversionRate, value);
+            get => _isLoadingDashboard;
+            set => SetProperty(ref _isLoadingDashboard, value);
         }
+
+        public ObservableCollection<AdminActivityModel> AdminActivities
+        {
+            get => _adminActivities;
+            set => SetProperty(ref _adminActivities, value);
+        }
+
+        public bool HasActivities => AdminActivities != null && AdminActivities.Count > 0;
 
         // --- Commands ---
 
@@ -220,6 +234,7 @@ namespace LeadManagement.Desktop.ViewModels
         public ICommand LogoutCommand { get; }
         public ICommand NavigateCommand { get; }
         public ICommand ToggleSidebarCommand { get; }
+        public ICommand RefreshDashboardCommand { get; }
 
         private void ExecuteToggleSidebar()
         {
@@ -272,6 +287,7 @@ namespace LeadManagement.Desktop.ViewModels
                     if (IsAdmin)
                     {
                         CurrentView = "Dashboard";
+                        _ = LoadDashboardStatsAsync();
                     }
                     else
                     {
@@ -310,7 +326,11 @@ namespace LeadManagement.Desktop.ViewModels
             if (parameter is string destination && !string.IsNullOrWhiteSpace(destination))
             {
                 CurrentView = destination;
-                if (destination == "LeadMasterlist")
+                if (destination == "Dashboard")
+                {
+                    _ = LoadDashboardStatsAsync();
+                }
+                else if (destination == "LeadMasterlist")
                 {
                     _ = Masterlist.LoadLeadsAsync();
                 }
@@ -322,6 +342,47 @@ namespace LeadManagement.Desktop.ViewModels
                 {
                     _ = UserManagement.LoadUsersAsync();
                 }
+            }
+        }
+
+        /// <summary>
+        /// Fetches the latest system-wide counts (Total Leads, Total Clients, Total Users)
+        /// and the latest 10 admin activities directly from the database.
+        /// </summary>
+        public async Task LoadDashboardStatsAsync()
+        {
+            if (IsLoadingDashboard) return;
+
+            IsLoadingDashboard = true;
+            try
+            {
+                var (success, _, data) = await ApiService.Instance.GetDashboardStatsAsync();
+                if (success && data != null)
+                {
+                    TotalLeads = data.TotalLeads.ToString("N0");
+                    TotalClients = data.TotalClients.ToString("N0");
+                    TotalUsers = data.TotalUsers.ToString("N0");
+
+                    AdminActivities.Clear();
+                    if (data.Activities != null)
+                    {
+                        // Ensure at most 10 items in the frontend view
+                        foreach (var act in data.Activities.Take(10))
+                        {
+                            AdminActivities.Add(act);
+                        }
+                    }
+
+                    OnPropertyChanged(nameof(HasActivities));
+                }
+            }
+            catch (Exception)
+            {
+                // Silently keep current numbers if network glitch
+            }
+            finally
+            {
+                IsLoadingDashboard = false;
             }
         }
     }

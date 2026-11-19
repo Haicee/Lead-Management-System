@@ -5,6 +5,8 @@
  * Handles CRUD operations for user accounts.
  */
 
+require_once __DIR__ . '/../core/ActivityLogger.php';
+
 class UserController
 {
     private PDO $db;
@@ -79,6 +81,12 @@ class UserController
             FROM users WHERE id = ?
         ");
         $stmt->execute([$newId]);
+
+        ActivityLogger::log(
+            'USER_MANAGE',
+            'Created User Account',
+            "Created user account '{$username}' (Role: " . ucfirst($role) . ")"
+        );
 
         Response::success($stmt->fetch(), 'User created successfully', 201);
     }
@@ -181,6 +189,12 @@ class UserController
         ");
         $stmt->execute([$id]);
 
+        ActivityLogger::log(
+            'USER_MANAGE',
+            'Updated User Account',
+            "Updated user account '{$username}' (Role: " . ucfirst($role) . ")"
+        );
+
         Response::success($stmt->fetch(), 'User account updated successfully');
     }
 
@@ -220,6 +234,12 @@ class UserController
         // Delete user (Foreign keys like client_assignments will cascade delete)
         $stmt = $this->db->prepare("DELETE FROM users WHERE id = ?");
         $stmt->execute([$id]);
+
+        ActivityLogger::log(
+            'USER_MANAGE',
+            'Deleted User Account',
+            "Deleted user account '{$user['username']}'"
+        );
 
         Response::success([
             'deleted_id' => $id,

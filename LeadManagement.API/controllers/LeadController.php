@@ -5,6 +5,8 @@
  * Handles batch lead imports, querying leads, and import audit history.
  */
 
+require_once __DIR__ . '/../core/ActivityLogger.php';
+
 class LeadController
 {
     private PDO $db;
@@ -132,6 +134,7 @@ class LeadController
             }
 
             // 3. If last chunk or single import, update batch total with exact count
+            $finalCount = 0;
             if ($isLastChunk || empty($input['batch_id'])) {
                 $stmtCount = $this->db->prepare("SELECT COUNT(*) FROM `leads` WHERE `batch_id` = ?");
                 $stmtCount->execute([$batchId]);
@@ -142,6 +145,18 @@ class LeadController
             }
 
             $this->db->commit();
+
+            // Log activity on complete batch import
+            if ($isLastChunk || empty($input['batch_id'])) {
+                $countToLog = $finalCount > 0 ? $finalCount : $totalLeads;
+                ActivityLogger::log(
+                    'IMPORT',
+                    'Imported Leads',
+                    "Imported " . number_format($countToLog) . " leads into batch '{$batchName}' from '{$fileName}'",
+                    $countToLog,
+                    $userId
+                );
+            }
 
             Response::success([
                 'batch_id'       => $batchId,
@@ -286,7 +301,8 @@ class LeadController
         $counties = $this->normalizeArray($input['counties'] ?? $input['county'] ?? []);
         $states = $this->normalizeArray($input['states'] ?? $input['state'] ?? []);
         $statuses = $this->normalizeArray($input['statuses'] ?? $input['status'] ?? []);
-        $industries = $this->normalizeArray($input['industries'] ?? $input['sic_description'] ?? []);
+        $sicCodes = $this->normalizeArray($input['sic_codes'] ?? $input['sic_code'] ?? []);
+        $sicDescs = $this->normalizeArray($input['sic_descriptions'] ?? $input['sic_description'] ?? $input['industries'] ?? []);
         $annualSales = $this->normalizeArray($input['annual_sales'] ?? []);
         $naicsCodes = $this->normalizeArray($input['naics_codes'] ?? $input['naics_code'] ?? []);
         $naicsDescs = $this->normalizeArray($input['naics_descriptions'] ?? $input['naics_description'] ?? []);
@@ -354,15 +370,16 @@ class LeadController
         $addInCondition('city', $cities);
         $addInCondition('county', $counties);
         $addInCondition('state', $states);
+        $addInCondition('sic_code', $sicCodes);
+        $addInCondition('sic_description', $sicDescs);
         $addInCondition('annual_sales', $annualSales);
         $addInCondition('naics_code', $naicsCodes);
         $addInCondition('naics_description', $naicsDescs);
-        $addInCondition('sic_description', $industries);
 
         if (!empty($search)) {
             $term = '%' . $search . '%';
-            $conditions[] = "(`business_name` LIKE ? OR `contact_name` LIKE ? OR `cell_number` LIKE ? OR `city` LIKE ? OR `county` LIKE ? OR `address` LIKE ? OR `zip_code` LIKE ? OR `naics_description` LIKE ? OR `sic_description` LIKE ? OR `title` LIKE ?)";
-            for ($k = 0; $k < 10; $k++) {
+            $conditions[] = "(`business_name` LIKE ? OR `contact_name` LIKE ? OR `cell_number` LIKE ? OR `city` LIKE ? OR `county` LIKE ? OR `address` LIKE ? OR `zip_code` LIKE ? OR `sic_code` LIKE ? OR `sic_description` LIKE ? OR `naics_code` LIKE ? OR `naics_description` LIKE ? OR `title` LIKE ?)";
+            for ($k = 0; $k < 12; $k++) {
                 $params[] = $term;
             }
         }
@@ -419,7 +436,8 @@ class LeadController
         $counties = $this->db->query("SELECT DISTINCT `county` FROM `leads` WHERE `county` IS NOT NULL AND `county` != '' ORDER BY `county` ASC")->fetchAll(PDO::FETCH_COLUMN);
         $states = $this->db->query("SELECT DISTINCT `state` FROM `leads` WHERE `state` IS NOT NULL AND `state` != '' ORDER BY `state` ASC")->fetchAll(PDO::FETCH_COLUMN);
         $statuses = $this->db->query("SELECT DISTINCT `status` FROM `leads` WHERE `status` IS NOT NULL AND `status` != '' ORDER BY `status` ASC")->fetchAll(PDO::FETCH_COLUMN);
-        $industries = $this->db->query("SELECT DISTINCT `sic_description` FROM `leads` WHERE `sic_description` IS NOT NULL AND `sic_description` != '' ORDER BY `sic_description` ASC")->fetchAll(PDO::FETCH_COLUMN);
+        $sicCodes = $this->db->query("SELECT DISTINCT `sic_code` FROM `leads` WHERE `sic_code` IS NOT NULL AND `sic_code` != '' ORDER BY `sic_code` ASC")->fetchAll(PDO::FETCH_COLUMN);
+        $sicDescs = $this->db->query("SELECT DISTINCT `sic_description` FROM `leads` WHERE `sic_description` IS NOT NULL AND `sic_description` != '' ORDER BY `sic_description` ASC")->fetchAll(PDO::FETCH_COLUMN);
         $annualSales = $this->db->query("SELECT DISTINCT `annual_sales` FROM `leads` WHERE `annual_sales` IS NOT NULL AND `annual_sales` != '' ORDER BY `annual_sales` ASC")->fetchAll(PDO::FETCH_COLUMN);
         $naicsCodes = $this->db->query("SELECT DISTINCT `naics_code` FROM `leads` WHERE `naics_code` IS NOT NULL AND `naics_code` != '' ORDER BY `naics_code` ASC")->fetchAll(PDO::FETCH_COLUMN);
         $naicsDescs = $this->db->query("SELECT DISTINCT `naics_description` FROM `leads` WHERE `naics_description` IS NOT NULL AND `naics_description` != '' ORDER BY `naics_description` ASC")->fetchAll(PDO::FETCH_COLUMN);
@@ -429,7 +447,9 @@ class LeadController
             'counties'           => $counties,
             'states'             => $states,
             'statuses'           => $statuses,
-            'industries'         => $industries,
+            'sic_codes'          => $sicCodes,
+            'sic_descriptions'   => $sicDescs,
+            'industries'         => $sicDescs,
             'annual_sales'       => $annualSales,
             'naics_codes'        => $naicsCodes,
             'naics_descriptions' => $naicsDescs
@@ -532,6 +552,13 @@ class LeadController
             $delBatch->execute([$batchId]);
 
             $this->db->commit();
+
+            ActivityLogger::log(
+                'DELETE_LEADS',
+                'Deleted Leads',
+                "Deleted " . number_format($deletedLeadsCount) . " leads from batch '{$batch['batch_name']}'",
+                $deletedLeadsCount
+            );
 
             Response::success([
                 'batch_id'      => $batchId,

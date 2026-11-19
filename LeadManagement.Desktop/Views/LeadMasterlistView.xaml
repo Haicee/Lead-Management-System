@@ -166,41 +166,49 @@
                                   ToolTip="Filter by Lead Status — select multiple statuses" />
                     </Grid>
 
-                    <!-- Row 3: Demographics & Classification Filters (4 Columns) — Multi-Select Checkboxes -->
+                    <!-- Row 3: SIC, NAICS & Financial Classification Filters (5 Columns) — Multi-Select Checkboxes -->
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
 
-                        <!-- Industry / SIC Description (multi-select) -->
+                        <!-- SIC Code (multi-select) -->
                         <controls:MultiSelectDropdown Grid.Column="0"
-                                  ItemsSource="{Binding IndustryItems}"
-                                  HeaderText="All Industries"
+                                  ItemsSource="{Binding SicCodeItems}"
+                                  HeaderText="All SIC Codes"
                                   Margin="0,0,8,0"
-                                  ToolTip="Filter by Industry (SIC Description) — select multiple" />
+                                  ToolTip="Filter by SIC Code — select multiple SIC codes" />
 
-                        <!-- Annual Sales (multi-select) -->
+                        <!-- SIC Description (multi-select) -->
                         <controls:MultiSelectDropdown Grid.Column="1"
-                                  ItemsSource="{Binding AnnualSalesItems}"
-                                  HeaderText="All Sales Ranges"
+                                  ItemsSource="{Binding SicDescItems}"
+                                  HeaderText="All SIC Descriptions"
                                   Margin="0,0,8,0"
-                                  ToolTip="Filter by Annual Sales Range — select multiple" />
+                                  ToolTip="Filter by SIC Description — select multiple SIC descriptions" />
 
                         <!-- NAICS Code (multi-select) -->
                         <controls:MultiSelectDropdown Grid.Column="2"
                                   ItemsSource="{Binding NaicsCodeItems}"
                                   HeaderText="All NAICS Codes"
                                   Margin="0,0,8,0"
-                                  ToolTip="Filter by NAICS Code — select multiple" />
+                                  ToolTip="Filter by NAICS Code — select multiple NAICS codes" />
 
                         <!-- NAICS Description (multi-select) -->
                         <controls:MultiSelectDropdown Grid.Column="3"
                                   ItemsSource="{Binding NaicsDescItems}"
                                   HeaderText="All NAICS Descriptions"
-                                  ToolTip="Filter by NAICS Description — select multiple" />
+                                  Margin="0,0,8,0"
+                                  ToolTip="Filter by NAICS Description — select multiple NAICS descriptions" />
+
+                        <!-- Annual Sales (multi-select) -->
+                        <controls:MultiSelectDropdown Grid.Column="4"
+                                  ItemsSource="{Binding AnnualSalesItems}"
+                                  HeaderText="All Sales Ranges"
+                                  ToolTip="Filter by Annual Sales Range — select multiple sales ranges" />
                     </Grid>
                 </StackPanel>
             </Border>

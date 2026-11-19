@@ -717,6 +717,13 @@ namespace LeadManagement.Desktop.ViewModels
                     }
                 }, ct);
 
+                _ = ApiService.Instance.LogActivityAsync(
+                    "EXPORT",
+                    "Exported Leads",
+                    $"Exported {leads.Count:N0} client leads from file '{file.FileName}' to Excel ({Path.GetFileName(savePath)})",
+                    leads.Count
+                );
+
                 ShowBanner($"✓ Exported {leads.Count:N0} updated leads to '{Path.GetFileName(savePath)}'.", isError: false);
             }
             catch (OperationCanceledException)

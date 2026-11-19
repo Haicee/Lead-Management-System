@@ -48,6 +48,19 @@ try {
         ], 'API is running');
     }
 
+    // Dashboard Routes
+    elseif (($path === 'dashboard/stats' || $path === 'dashboard') && $method === 'GET') {
+        require_once __DIR__ . '/controllers/DashboardController.php';
+        $controller = new DashboardController();
+        $controller->stats();
+    }
+
+    elseif (($path === 'activities' || $path === 'activities/log') && $method === 'POST') {
+        require_once __DIR__ . '/controllers/DashboardController.php';
+        $controller = new DashboardController();
+        $controller->logActivity($input);
+    }
+
     // Auth Routes
     elseif ($path === 'auth/login' && $method === 'POST') {
         require_once __DIR__ . '/controllers/AuthController.php';

@@ -66,10 +66,7 @@
                         </Border>
                         <TextBlock Text="Leads Management System" FontSize="16" FontWeight="Bold" Foreground="White" VerticalAlignment="Center" />
 
-                        <!-- Admin Badge -->
-                        <Border Background="#1E3A8A" BorderBrush="#3B82F6" BorderThickness="1" CornerRadius="10" Padding="8,2" Margin="14,0,0,0" VerticalAlignment="Center">
-                            <TextBlock Text="👑 ADMINISTRATOR" FontSize="10.5" FontWeight="Bold" Foreground="#93C5FD" />
-                        </Border>
+                        
                     </StackPanel>
 
                     <!-- Right Top Navigation: Status & User Session -->
