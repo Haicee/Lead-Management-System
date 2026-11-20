@@ -5,6 +5,8 @@
  * Handles batch lead imports, querying leads, and import audit history.
  */
 
+require_once __DIR__ . '/../core/Database.php';
+require_once __DIR__ . '/../core/Response.php';
 require_once __DIR__ . '/../core/ActivityLogger.php';
 
 class LeadController
@@ -306,50 +308,67 @@ class LeadController
         $annualSales = $this->normalizeArray($input['annual_sales'] ?? []);
         $naicsCodes = $this->normalizeArray($input['naics_codes'] ?? $input['naics_code'] ?? []);
         $naicsDescs = $this->normalizeArray($input['naics_descriptions'] ?? $input['naics_description'] ?? []);
+        $clients = $this->normalizeArray($input['clients'] ?? $input['client'] ?? []);
+        if (isset($input['client_id']) && $input['client_id'] !== '' && $input['client_id'] !== null) {
+            $clients[] = (string)$input['client_id'];
+        }
 
         // Sorting
         $sortMap = [
-            'id' => 'id',
-            'status' => 'status',
-            'businessname' => 'business_name',
-            'business_name' => 'business_name',
-            'address' => 'address',
-            'city' => 'city',
-            'county' => 'county',
-            'state' => 'state',
-            'zipcode' => 'zip_code',
-            'zip_code' => 'zip_code',
-            'cellnumber' => 'cell_number',
-            'cell_number' => 'cell_number',
-            'fax' => 'fax',
-            'annualsales' => 'annual_sales',
-            'annual_sales' => 'annual_sales',
-            'numberofemployees' => 'number_of_employees',
-            'number_of_employees' => 'number_of_employees',
-            'title' => 'title',
-            'contactname' => 'contact_name',
-            'contact_name' => 'contact_name',
-            'website' => 'website',
-            'siccode' => 'sic_code',
-            'sic_code' => 'sic_code',
-            'sicdescription' => 'sic_description',
-            'sic_description' => 'sic_description',
-            'naicscode' => 'naics_code',
-            'naics_code' => 'naics_code',
-            'naicsdescription' => 'naics_description',
-            'naics_description' => 'naics_description',
-            'createdat' => 'created_at',
-            'created_at' => 'created_at',
+            'id' => 'l.id',
+            'status' => 'l.status',
+            'businessname' => 'l.business_name',
+            'business_name' => 'l.business_name',
+            'address' => 'l.address',
+            'city' => 'l.city',
+            'county' => 'l.county',
+            'state' => 'l.state',
+            'zipcode' => 'l.zip_code',
+            'zip_code' => 'l.zip_code',
+            'cellnumber' => 'l.cell_number',
+            'cell_number' => 'l.cell_number',
+            'fax' => 'l.fax',
+            'annualsales' => 'l.annual_sales',
+            'annual_sales' => 'l.annual_sales',
+            'numberofemployees' => 'l.number_of_employees',
+            'number_of_employees' => 'l.number_of_employees',
+            'title' => 'l.title',
+            'contactname' => 'l.contact_name',
+            'contact_name' => 'l.contact_name',
+            'website' => 'l.website',
+            'siccode' => 'l.sic_code',
+            'sic_code' => 'l.sic_code',
+            'sicdescription' => 'l.sic_description',
+            'sic_description' => 'l.sic_description',
+            'naicscode' => 'l.naics_code',
+            'naics_code' => 'l.naics_code',
+            'naicsdescription' => 'l.naics_description',
+            'naics_description' => 'l.naics_description',
+            'createdat' => 'l.created_at',
+            'created_at' => 'l.created_at',
+            'calldate' => 'l.call_date',
+            'call_date' => 'l.call_date',
+            'calldisposition' => 'l.call_disposition',
+            'call_disposition' => 'l.call_disposition',
+            'assignedagent' => 'l.assigned_agent',
+            'assigned_agent' => 'l.assigned_agent',
+            'notes' => 'l.notes',
+            'callcount' => 'l.call_count',
+            'call_count' => 'l.call_count',
+            'clientid' => 'l.client_id',
+            'client_id' => 'l.client_id',
+            'clientname' => 'client_name',
+            'client_name' => 'client_name'
         ];
         $rawSort = strtolower(str_replace('_', '', $input['sort_by'] ?? ''));
-        $sortBy = $sortMap[$rawSort] ?? 'id';
+        $sortBy = $sortMap[$rawSort] ?? 'l.id';
         $sortDir = strtoupper($input['sort_direction'] ?? '') === 'DESC' ? 'DESC' : 'ASC';
 
         $conditions = [];
         $params = [];
 
         if (!empty($batchId)) {
-            $conditions[] = "`batch_id` = ?";
+            $conditions[] = "l.`batch_id` = ?";
             $params[] = $batchId;
         }
 
@@ -359,7 +378,7 @@ class LeadController
             }));
             if (!empty($filtered)) {
                 $placeholders = implode(',', array_fill(0, count($filtered), '?'));
-                $conditions[] = "`{$col}` IN ({$placeholders})";
+                $conditions[] = "l.`{$col}` IN ({$placeholders})";
                 foreach ($filtered as $val) {
                     $params[] = $val;
                 }
@@ -376,10 +395,29 @@ class LeadController
         $addInCondition('naics_code', $naicsCodes);
         $addInCondition('naics_description', $naicsDescs);
 
+        // Client filter (supports "Unassigned" / -1, or client ID/name)
+        if (!empty($clients)) {
+            $clientClauses = [];
+            foreach ($clients as $cVal) {
+                if ($cVal === 'Unassigned' || $cVal === '-1' || $cVal === 'unassigned') {
+                    $clientClauses[] = "(l.`client_id` IS NULL OR l.`client_id` = 0)";
+                } elseif (is_numeric($cVal) && (int)$cVal > 0) {
+                    $clientClauses[] = "l.`client_id` = ?";
+                    $params[] = (int)$cVal;
+                } elseif (is_string($cVal) && !empty($cVal) && !str_starts_with($cVal, 'All ')) {
+                    $clientClauses[] = "CONCAT(TRIM(COALESCE(c.first_name, '')), ' ', TRIM(COALESCE(c.last_name, ''))) = ?";
+                    $params[] = $cVal;
+                }
+            }
+            if (!empty($clientClauses)) {
+                $conditions[] = "(" . implode(' OR ', $clientClauses) . ")";
+            }
+        }
+
         if (!empty($search)) {
             $term = '%' . $search . '%';
-            $conditions[] = "(`business_name` LIKE ? OR `contact_name` LIKE ? OR `cell_number` LIKE ? OR `city` LIKE ? OR `county` LIKE ? OR `address` LIKE ? OR `zip_code` LIKE ? OR `sic_code` LIKE ? OR `sic_description` LIKE ? OR `naics_code` LIKE ? OR `naics_description` LIKE ? OR `title` LIKE ?)";
-            for ($k = 0; $k < 12; $k++) {
+            $conditions[] = "(l.`business_name` LIKE ? OR l.`contact_name` LIKE ? OR l.`cell_number` LIKE ? OR l.`city` LIKE ? OR l.`county` LIKE ? OR l.`address` LIKE ? OR l.`zip_code` LIKE ? OR l.`sic_code` LIKE ? OR l.`sic_description` LIKE ? OR l.`naics_code` LIKE ? OR l.`naics_description` LIKE ? OR l.`title` LIKE ? OR l.`notes` LIKE ? OR l.`assigned_agent` LIKE ? OR l.`call_disposition` LIKE ? OR CONCAT(TRIM(COALESCE(c.first_name, '')), ' ', TRIM(COALESCE(c.last_name, ''))) LIKE ?)";
+            for ($k = 0; $k < 16; $k++) {
                 $params[] = $term;
             }
         }
@@ -391,16 +429,25 @@ class LeadController
         $totalAll = (int) $totalAllStmt->fetchColumn();
 
         // Total leads matching current filters
-        $countStmt = $this->db->prepare("SELECT COUNT(*) FROM `leads` {$whereClause}");
+        $countSql = "
+            SELECT COUNT(*) 
+            FROM `leads` l 
+            LEFT JOIN `clients` c ON l.client_id = c.id 
+            {$whereClause}
+        ";
+        $countStmt = $this->db->prepare($countSql);
         $countStmt->execute($params);
         $filteredTotal = (int) $countStmt->fetchColumn();
 
-        // Data rows
+        // Data rows with Client Full Name joined
         $limitClause = $limit > 0 ? "LIMIT {$limit} OFFSET {$offset}" : "";
         $sql = "
-            SELECT * FROM `leads` 
+            SELECT l.*, 
+                   CONCAT(TRIM(COALESCE(c.first_name, '')), ' ', TRIM(COALESCE(c.last_name, ''))) AS client_name 
+            FROM `leads` l 
+            LEFT JOIN `clients` c ON l.client_id = c.id 
             {$whereClause} 
-            ORDER BY `{$sortBy}` {$sortDir} 
+            ORDER BY {$sortBy} {$sortDir} 
             {$limitClause}
         ";
         $stmt = $this->db->prepare($sql);
@@ -441,6 +488,9 @@ class LeadController
         $annualSales = $this->db->query("SELECT DISTINCT `annual_sales` FROM `leads` WHERE `annual_sales` IS NOT NULL AND `annual_sales` != '' ORDER BY `annual_sales` ASC")->fetchAll(PDO::FETCH_COLUMN);
         $naicsCodes = $this->db->query("SELECT DISTINCT `naics_code` FROM `leads` WHERE `naics_code` IS NOT NULL AND `naics_code` != '' ORDER BY `naics_code` ASC")->fetchAll(PDO::FETCH_COLUMN);
         $naicsDescs = $this->db->query("SELECT DISTINCT `naics_description` FROM `leads` WHERE `naics_description` IS NOT NULL AND `naics_description` != '' ORDER BY `naics_description` ASC")->fetchAll(PDO::FETCH_COLUMN);
+        
+        // Return available clients for the Masterlist client filter and assignment
+        $clients = $this->db->query("SELECT `id`, CONCAT(TRIM(`first_name`), ' ', TRIM(`last_name`)) AS `name` FROM `clients` ORDER BY `first_name` ASC, `last_name` ASC")->fetchAll();
 
         Response::success([
             'cities'             => $cities,
@@ -452,7 +502,8 @@ class LeadController
             'industries'         => $sicDescs,
             'annual_sales'       => $annualSales,
             'naics_codes'        => $naicsCodes,
-            'naics_descriptions' => $naicsDescs
+            'naics_descriptions' => $naicsDescs,
+            'clients'            => $clients
         ], 'Filter options retrieved');
     }
 
@@ -603,6 +654,7 @@ class LeadController
         }
 
         $allowedFields = [
+            'client_id',
             'call_date',
             'call_disposition',
             'assigned_agent_id',
@@ -654,5 +706,133 @@ class LeadController
         $updatedLead = $fetchStmt->fetch();
 
         Response::success($updatedLead, 'Lead updated successfully');
+    }
+
+    /**
+     * POST /leads/assign-client or POST /leads/assign
+     * 
+     * Centralized masterlist assignment: Assigns filtered or specified leads to a chosen client.
+     */
+    public function assignToClient(array $input): void
+    {
+        $clientId = isset($input['client_id']) ? (int)$input['client_id'] : 0;
+        if ($clientId <= 0) {
+            Response::error('Please select a valid client.', 422);
+        }
+
+        $stmtClient = $this->db->prepare("SELECT id, first_name, last_name FROM `clients` WHERE id = ?");
+        $stmtClient->execute([$clientId]);
+        $client = $stmtClient->fetch();
+        if (!$client) {
+            Response::notFound('Client not found.');
+        }
+        $clientName = trim($client['first_name'] . ' ' . $client['last_name']);
+
+        // Case 1: Specific lead IDs provided
+        if (!empty($input['lead_ids']) && is_array($input['lead_ids'])) {
+            $leadIds = array_values(array_filter(array_map('intval', $input['lead_ids']), fn($id) => $id > 0));
+            if (empty($leadIds)) {
+                Response::error('No valid lead records selected.', 422);
+            }
+
+            // High performance chunked update
+            $chunkSize = 500;
+            $idChunks = array_chunk($leadIds, $chunkSize);
+            $totalUpdated = 0;
+
+            foreach ($idChunks as $chunk) {
+                $placeholders = implode(',', array_fill(0, count($chunk), '?'));
+                $sql = "UPDATE `leads` SET `client_id` = ? WHERE `id` IN ({$placeholders})";
+                $stmt = $this->db->prepare($sql);
+                $params = array_merge([$clientId], $chunk);
+                $stmt->execute($params);
+                $totalUpdated += $stmt->rowCount();
+            }
+
+            ActivityLogger::log(
+                'CLIENT_ASSIGN',
+                'Assigned Leads to Client',
+                "Assigned {$totalUpdated} lead(s) to client '{$clientName}'"
+            );
+
+            Response::success([
+                'assigned_count' => $totalUpdated,
+                'client_id'      => $clientId,
+                'client_name'    => $clientName
+            ], "Successfully assigned {$totalUpdated} lead(s) to {$clientName}.");
+            return;
+        }
+
+        // Case 2: Assign all matching current query filters
+        $filters = $input['filters'] ?? $input;
+        $batchId = !empty($filters['batch_id']) ? (int) $filters['batch_id'] : null;
+        $cities = $this->normalizeArray($filters['cities'] ?? $filters['city'] ?? []);
+        $counties = $this->normalizeArray($filters['counties'] ?? $filters['county'] ?? []);
+        $states = $this->normalizeArray($filters['states'] ?? $filters['state'] ?? []);
+        $statuses = $this->normalizeArray($filters['statuses'] ?? $filters['status'] ?? []);
+        $sicCodes = $this->normalizeArray($filters['sic_codes'] ?? $filters['sic_code'] ?? []);
+        $sicDescs = $this->normalizeArray($filters['sic_descriptions'] ?? $filters['sic_description'] ?? $filters['industries'] ?? []);
+        $annualSales = $this->normalizeArray($filters['annual_sales'] ?? []);
+        $naicsCodes = $this->normalizeArray($filters['naics_codes'] ?? $filters['naics_code'] ?? []);
+        $naicsDescs = $this->normalizeArray($filters['naics_descriptions'] ?? $filters['naics_description'] ?? []);
+        $search = trim($filters['search'] ?? '');
+
+        $conditions = [];
+        $params = [];
+
+        if (!empty($batchId)) {
+            $conditions[] = "`batch_id` = ?";
+            $params[] = $batchId;
+        }
+
+        $addInCondition = function(string $col, array $values) use (&$conditions, &$params) {
+            $filtered = array_values(array_filter($values, function($v) {
+                return $v !== null && $v !== '' && !str_starts_with($v, 'All ');
+            }));
+            if (!empty($filtered)) {
+                $placeholders = implode(',', array_fill(0, count($filtered), '?'));
+                $conditions[] = "`{$col}` IN ({$placeholders})";
+                foreach ($filtered as $val) {
+                    $params[] = $val;
+                }
+            }
+        };
+
+        $addInCondition('status', $statuses);
+        $addInCondition('city', $cities);
+        $addInCondition('county', $counties);
+        $addInCondition('state', $states);
+        $addInCondition('sic_code', $sicCodes);
+        $addInCondition('sic_description', $sicDescs);
+        $addInCondition('annual_sales', $annualSales);
+        $addInCondition('naics_code', $naicsCodes);
+        $addInCondition('naics_description', $naicsDescs);
+
+        if (!empty($search)) {
+            $term = '%' . $search . '%';
+            $conditions[] = "(`business_name` LIKE ? OR `contact_name` LIKE ? OR `cell_number` LIKE ? OR `city` LIKE ? OR `county` LIKE ? OR `address` LIKE ? OR `zip_code` LIKE ? OR `sic_code` LIKE ? OR `sic_description` LIKE ? OR `naics_code` LIKE ? OR `naics_description` LIKE ? OR `title` LIKE ?)";
+            for ($k = 0; $k < 12; $k++) {
+                $params[] = $term;
+            }
+        }
+
+        $whereClause = !empty($conditions) ? 'WHERE ' . implode(' AND ', $conditions) : '';
+
+        $sql = "UPDATE `leads` SET `client_id` = ? {$whereClause}";
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute(array_merge([$clientId], $params));
+        $affected = $stmt->rowCount();
+
+        ActivityLogger::log(
+            'CLIENT_ASSIGN',
+            'Assigned Filtered Leads to Client',
+            "Assigned {$affected} filtered lead(s) to client '{$clientName}'"
+        );
+
+        Response::success([
+            'assigned_count' => $affected,
+            'client_id'      => $clientId,
+            'client_name'    => $clientName
+        ], "Successfully assigned {$affected} lead(s) to {$clientName}.");
     }
 }

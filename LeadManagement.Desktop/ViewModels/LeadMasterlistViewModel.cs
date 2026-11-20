@@ -49,6 +49,15 @@ namespace LeadManagement.Desktop.ViewModels
             NextPageCommand = new RelayCommand(() => GoToPage(CurrentPage + 1), () => HasNextPage);
             LastPageCommand = new RelayCommand(() => GoToPage(TotalPages), () => HasNextPage);
 
+            CallLeadCommand = new RelayCommand<LeadModel>(ExecuteCallLead);
+            OpenAssignClientModalCommand = new RelayCommand(ExecuteOpenAssignClientModal);
+            CloseAssignClientModalCommand = new RelayCommand(() => IsAssignClientModalOpen = false);
+            ConfirmAssignClientCommand = new RelayCommand(async () => await ExecuteConfirmAssignClientAsync(), () => !IsAssigning && SelectedTargetClient != null);
+            DismissBannerCommand = new RelayCommand(() => IsBannerVisible = false);
+
+            // Pre-warm Zoom in background for instant click-to-dial
+            _ = Task.Run(() => ZoomPhoneService.EnsureZoomRunning());
+
             // High performance parallel startup: load distinct filter options and fetch initial 1,000 page
             _ = InitializeAsync();
         }
@@ -179,6 +188,9 @@ namespace LeadManagement.Desktop.ViewModels
 
         // ─── Multi-Select Filter Collections (ObservableCollection<FilterItem>) ───
 
+        public ObservableCollection<FilterItem> ClientItems { get; } = new();
+        public ObservableCollection<ClientModel> AvailableClients { get; } = new();
+        public ObservableCollection<string> AllAgentOptions { get; } = new() { "" };
         public ObservableCollection<FilterItem> CityItems { get; } = new();
         public ObservableCollection<FilterItem> CountyItems { get; } = new();
         public ObservableCollection<FilterItem> StateItems { get; } = new();
@@ -189,6 +201,90 @@ namespace LeadManagement.Desktop.ViewModels
         public ObservableCollection<FilterItem> NaicsCodeItems { get; } = new();
         public ObservableCollection<FilterItem> NaicsDescItems { get; } = new();
         public ObservableCollection<FilterItem> StatusItems { get; } = new();
+
+        // ─── Assign to Client Modal & Notification State ─────────────────────────
+        private bool _isAssignClientModalOpen = false;
+        private ClientModel? _selectedTargetClient;
+        private string _assignModalSummary = string.Empty;
+        private bool _isAssigning = false;
+        private string _assignErrorMessage = string.Empty;
+        private string _statusBannerMessage = string.Empty;
+        private bool _isBannerVisible = false;
+        private bool _isBannerError = false;
+
+        public bool IsAssignClientModalOpen
+        {
+            get => _isAssignClientModalOpen;
+            set => SetProperty(ref _isAssignClientModalOpen, value);
+        }
+
+        public ClientModel? SelectedTargetClient
+        {
+            get => _selectedTargetClient;
+            set
+            {
+                if (SetProperty(ref _selectedTargetClient, value))
+                {
+                    CommandManager.InvalidateRequerySuggested();
+                }
+            }
+        }
+
+        public string AssignModalSummary
+        {
+            get => _assignModalSummary;
+            set => SetProperty(ref _assignModalSummary, value);
+        }
+
+        public bool IsAssigning
+        {
+            get => _isAssigning;
+            set
+            {
+                if (SetProperty(ref _isAssigning, value))
+                {
+                    CommandManager.InvalidateRequerySuggested();
+                }
+            }
+        }
+
+        public string AssignErrorMessage
+        {
+            get => _assignErrorMessage;
+            set
+            {
+                if (SetProperty(ref _assignErrorMessage, value))
+                {
+                    OnPropertyChanged(nameof(HasAssignError));
+                }
+            }
+        }
+
+        public bool HasAssignError => !string.IsNullOrEmpty(AssignErrorMessage);
+
+        public string StatusBannerMessage
+        {
+            get => _statusBannerMessage;
+            set => SetProperty(ref _statusBannerMessage, value);
+        }
+
+        public bool IsBannerVisible
+        {
+            get => _isBannerVisible;
+            set => SetProperty(ref _isBannerVisible, value);
+        }
+
+        public bool IsBannerError
+        {
+            get => _isBannerError;
+            set => SetProperty(ref _isBannerError, value);
+        }
+
+        public ICommand CallLeadCommand { get; }
+        public ICommand OpenAssignClientModalCommand { get; }
+        public ICommand CloseAssignClientModalCommand { get; }
+        public ICommand ConfirmAssignClientCommand { get; }
+        public ICommand DismissBannerCommand { get; }
 
         // ─── Computed Properties ─────────────────────────────────────────────────
 
@@ -206,6 +302,7 @@ namespace LeadManagement.Desktop.ViewModels
 
         public bool HasActiveFilters =>
             !string.IsNullOrWhiteSpace(SearchText) ||
+            ClientItems.Any(i => i.IsSelected) ||
             CityItems.Any(i => i.IsSelected) ||
             CountyItems.Any(i => i.IsSelected) ||
             StateItems.Any(i => i.IsSelected) ||
@@ -350,6 +447,13 @@ namespace LeadManagement.Desktop.ViewModels
                     FilteredCount = data.FilteredTotal;
                     FilteredLeads = new ObservableCollection<LeadModel>(data.Leads);
 
+                    // Hook up real-time autosync and assign agent dropdown options for each lead
+                    foreach (var lead in FilteredLeads)
+                    {
+                        lead.AvailableAgentOptions = AllAgentOptions;
+                        lead.OnFieldChanged = (l, field) => SyncLeadField(l, field);
+                    }
+
                     if (SelectedLead == null || !FilteredLeads.Contains(SelectedLead))
                     {
                         SelectedLead = FilteredLeads.FirstOrDefault();
@@ -380,6 +484,7 @@ namespace LeadManagement.Desktop.ViewModels
 
         private LeadQueryRequest BuildQueryRequest(int limit, int offset)
         {
+            var clients = GetSelected(ClientItems);
             var cities = GetSelected(CityItems);
             var counties = GetSelected(CountyItems);
             var states = GetSelected(StateItems);
@@ -397,6 +502,7 @@ namespace LeadManagement.Desktop.ViewModels
                 Offset = offset,
                 SortBy = _sortBy,
                 SortDirection = _sortDirection,
+                Clients = clients.Count > 0 ? clients : null,
                 Cities = cities.Count > 0 ? cities : null,
                 Counties = counties.Count > 0 ? counties : null,
                 States = states.Count > 0 ? states : null,
@@ -433,6 +539,7 @@ namespace LeadManagement.Desktop.ViewModels
                 _searchText = string.Empty;
                 OnPropertyChanged(nameof(SearchText));
 
+                foreach (var item in ClientItems) item.IsSelected = false;
                 foreach (var item in CityItems) item.IsSelected = false;
                 foreach (var item in CountyItems) item.IsSelected = false;
                 foreach (var item in StateItems) item.IsSelected = false;
@@ -487,6 +594,43 @@ namespace LeadManagement.Desktop.ViewModels
                 var knownStatuses = new[] { "New Lead", "Qualified", "Follow-up", "Contacted" };
                 var mergedStatuses = knownStatuses.Union(filters.Statuses ?? new List<string>(), StringComparer.OrdinalIgnoreCase).OrderBy(s => s).ToList();
                 LoadItems(StatusItems, mergedStatuses);
+
+                // 1. Populate clients dropdown & client filter list
+                var (clientsOk, _, clientList) = await ApiService.Instance.GetClientsAsync();
+                if (clientsOk && clientList != null)
+                {
+                    AvailableClients.Clear();
+                    var clientNames = new List<string> { "Unassigned" };
+                    foreach (var c in clientList)
+                    {
+                        AvailableClients.Add(c);
+                        if (!string.IsNullOrWhiteSpace(c.FullName))
+                        {
+                            clientNames.Add(c.FullName.Trim());
+                        }
+                    }
+                    LoadItems(ClientItems, clientNames);
+                    if (SelectedTargetClient == null)
+                    {
+                        SelectedTargetClient = AvailableClients.FirstOrDefault();
+                    }
+                }
+
+                // 2. Populate available agents for the AGENT column dropdown
+                var (usersOk, _, userList) = await ApiService.Instance.GetUsersAsync();
+                if (usersOk && userList != null)
+                {
+                    AllAgentOptions.Clear();
+                    AllAgentOptions.Add(""); // Empty for unassigned
+                    foreach (var u in userList.Where(u => u.Role == "user" || u.Role == "admin"))
+                    {
+                        var name = !string.IsNullOrWhiteSpace(u.FullName) ? u.FullName.Trim() : u.Username.Trim();
+                        if (!string.IsNullOrWhiteSpace(name) && !AllAgentOptions.Contains(name))
+                        {
+                            AllAgentOptions.Add(name);
+                        }
+                    }
+                }
             }
             catch (Exception ex)
             {
@@ -496,6 +640,127 @@ namespace LeadManagement.Desktop.ViewModels
             {
                 _isPopulatingFilters = false;
             }
+        }
+
+        // ─── Real-Time Autosync on Edit ──────────────────────────────────────────
+
+        private async void SyncLeadField(LeadModel lead, string field)
+        {
+            if (lead == null || lead.Id <= 0) return;
+            try
+            {
+                object payload = field switch
+                {
+                    "call_date" => new { call_date = lead.CallDate },
+                    "call_disposition" => new { call_disposition = lead.CallDisposition },
+                    "assigned_agent" => new { assigned_agent = lead.AssignedAgent },
+                    "notes" => new { notes = lead.Notes },
+                    "call_count" => new { call_count = lead.CallCount },
+                    "cell_number" => new { cell_number = lead.CellNumber },
+                    "business_name" => new { business_name = lead.BusinessName },
+                    "contact_name" => new { contact_name = lead.ContactName },
+                    "email" => new { email = lead.Email },
+                    "status" => new { status = lead.Status },
+                    _ => new
+                    {
+                        call_date = lead.CallDate,
+                        call_disposition = lead.CallDisposition,
+                        assigned_agent = lead.AssignedAgent,
+                        notes = lead.Notes,
+                        call_count = lead.CallCount
+                    }
+                };
+
+                await ApiService.Instance.UpdateLeadAsync(lead.Id, payload);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[Masterlist Field Sync Error] {ex.Message}");
+            }
+        }
+
+        private void ExecuteCallLead(LeadModel? lead)
+        {
+            if (lead == null) return;
+            lead.CallCount++;
+            lead.CallDate = DateTime.Now.ToString("MM/dd/yy", System.Globalization.CultureInfo.InvariantCulture);
+            SyncLeadField(lead, "call_count");
+            SyncLeadField(lead, "call_date");
+            ZoomPhoneService.Dial(lead.CellNumber);
+        }
+
+        // ─── Assign to Client Actions ────────────────────────────────────────────
+
+        private void ExecuteOpenAssignClientModal()
+        {
+            if (FilteredCount == 0)
+            {
+                MessageBox.Show("There are no leads matching your current filters to assign.", "Assign to Client", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            AssignErrorMessage = string.Empty;
+            if (SelectedTargetClient == null)
+            {
+                SelectedTargetClient = AvailableClients.FirstOrDefault();
+            }
+
+            AssignModalSummary = HasActiveFilters
+                ? $"Assign all {FilteredCount:N0} currently filtered lead(s) to the selected client."
+                : $"Assign all {TotalCount:N0} lead(s) in the database to the selected client.";
+
+            IsAssignClientModalOpen = true;
+        }
+
+        private async Task ExecuteConfirmAssignClientAsync()
+        {
+            if (SelectedTargetClient == null)
+            {
+                AssignErrorMessage = "Please select a client to assign.";
+                return;
+            }
+
+            IsAssigning = true;
+            AssignErrorMessage = string.Empty;
+            try
+            {
+                var queryReq = BuildQueryRequest(limit: 0, offset: 0);
+                var (ok, msg, count) = await ApiService.Instance.AssignLeadsToClientAsync(
+                    SelectedTargetClient.Id,
+                    leadIds: null,
+                    filters: queryReq);
+
+                if (ok)
+                {
+                    IsAssignClientModalOpen = false;
+                    ShowBanner($"Successfully assigned {count:N0} lead(s) to {SelectedTargetClient.FullName}!");
+                    await FetchLeadsPageAsync();
+                }
+                else
+                {
+                    AssignErrorMessage = msg;
+                }
+            }
+            catch (Exception ex)
+            {
+                AssignErrorMessage = ex.Message;
+            }
+            finally
+            {
+                IsAssigning = false;
+            }
+        }
+
+        private void ShowBanner(string message, bool isError = false)
+        {
+            StatusBannerMessage = message;
+            IsBannerError = isError;
+            IsBannerVisible = true;
+            _ = Task.Run(async () =>
+            {
+                await Task.Delay(4500);
+                IsBannerVisible = false;
+            });
         }
 
         /// <summary>

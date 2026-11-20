@@ -71,6 +71,7 @@ namespace LeadManagement.Desktop.ViewModels
             RefreshCommand            = new RelayCommand(async () => await LoadAssignedClientsAsync());
             ToggleExpandCommand       = new RelayCommand<ClientModel>(ExecuteToggleExpand);
             PreviewFileCommand        = new RelayCommand<ClientFileModel>(async f => await ExecutePreviewFileAsync(f));
+            ViewClientLeadsCommand    = new RelayCommand<ClientModel>(async c => await ExecuteViewClientLeadsAsync(c));
             ClosePreviewCommand       = new RelayCommand(ExecuteClosePreview);
             CallLeadCommand           = new RelayCommand<LeadModel>(ExecuteCallLead);
             ExportFileCommand         = new RelayCommand<ClientFileModel>(async f => await ExecuteExportFileAsync(f));
@@ -280,6 +281,7 @@ namespace LeadManagement.Desktop.ViewModels
         public ICommand RefreshCommand { get; }
         public ICommand ToggleExpandCommand { get; }
         public ICommand PreviewFileCommand { get; }
+        public ICommand ViewClientLeadsCommand { get; }
         public ICommand ClosePreviewCommand { get; }
         public ICommand CallLeadCommand { get; }
         public ICommand ExportFileCommand { get; }
@@ -442,6 +444,94 @@ namespace LeadManagement.Desktop.ViewModels
                     }
 
                     PreviewSubtitle  = $"{file.ClientName}  ·  {_allPreviewLeads.Count:N0} leads  ·  {file.FileSize}  ·  {file.FormattedDate}";
+                    ApplyPreviewSearch();
+                }
+                else
+                {
+                    ShowBanner($"Could not load preview: {msg}", isError: true);
+                    IsPreviewOpen = false;
+                }
+            }
+            catch (Exception ex)
+            {
+                ShowBanner($"Preview error: {ex.Message}", isError: true);
+                IsPreviewOpen = false;
+            }
+            finally
+            {
+                IsLoadingPreview = false;
+            }
+        }
+
+        private async Task ExecuteViewClientLeadsAsync(ClientModel? client)
+        {
+            if (client == null) return;
+
+            IsLoadingPreview = true;
+            IsPreviewOpen    = true;
+            PreviewTitle     = $"{client.FullName}'s Assigned Leads";
+            PreviewSubtitle  = $"{client.FullName}  ·  {client.TotalLeads:N0} assigned leads";
+            PreviewSearchText = string.Empty;
+            _allPreviewLeads.Clear();
+            FilteredPreviewLeads = new ObservableCollection<LeadModel>();
+
+            _ = Task.Run(() => ZoomPhoneService.EnsureZoomRunning());
+
+            try
+            {
+                var (ok, msg, leads) = await ApiService.Instance.GetClientLeadsAsync(client.Id);
+                if (ok && leads != null)
+                {
+                    _allPreviewLeads = leads;
+                    client.UpdateAssignedAgentNames();
+
+                    var agentNames = new ObservableCollection<string> { "" };
+
+                    if (client.AssignedAgents != null && client.AssignedAgents.Count > 0)
+                    {
+                        foreach (var a in client.AssignedAgents)
+                        {
+                            var name = !string.IsNullOrWhiteSpace(a.FullName) ? a.FullName.Trim() : a.Username.Trim();
+                            if (!string.IsNullOrWhiteSpace(name) && !agentNames.Contains(name))
+                            {
+                                agentNames.Add(name);
+                            }
+                        }
+                    }
+
+                    if (client.AssignedAgentNames != null)
+                    {
+                        foreach (var name in client.AssignedAgentNames)
+                        {
+                            if (!string.IsNullOrWhiteSpace(name) && !agentNames.Contains(name.Trim()))
+                            {
+                                agentNames.Add(name.Trim());
+                            }
+                        }
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(AgentName) && !agentNames.Contains(AgentName.Trim()))
+                    {
+                        agentNames.Add(AgentName.Trim());
+                    }
+
+                    foreach (var lead in _allPreviewLeads)
+                    {
+                        if (!string.IsNullOrWhiteSpace(lead.AssignedAgent) && !agentNames.Contains(lead.AssignedAgent.Trim()))
+                        {
+                            agentNames.Add(lead.AssignedAgent.Trim());
+                        }
+                    }
+
+                    client.AssignedAgentNames = agentNames;
+
+                    foreach (var lead in _allPreviewLeads)
+                    {
+                        lead.AvailableAgentOptions = agentNames;
+                        lead.OnFieldChanged = (l, field) => SyncLeadField(l, field);
+                    }
+
+                    PreviewSubtitle  = $"{client.FullName}  ·  {_allPreviewLeads.Count:N0} leads assigned from Masterlist";
                     ApplyPreviewSearch();
                 }
                 else

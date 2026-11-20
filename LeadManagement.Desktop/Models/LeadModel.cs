@@ -12,6 +12,7 @@ namespace LeadManagement.Desktop.Models
         private int? _batchId;
         private string _batchName = string.Empty;
         private int? _clientId;
+        private string _clientName = string.Empty;
         private string _callDate = string.Empty;
         private string _callDisposition = string.Empty;
         private int? _assignedAgentId;
@@ -77,6 +78,13 @@ namespace LeadManagement.Desktop.Models
         {
             get => _clientId;
             set => SetProperty(ref _clientId, value);
+        }
+
+        [JsonPropertyName("client_name")]
+        public string ClientName
+        {
+            get => _clientName;
+            set => SetProperty(ref _clientName, value ?? string.Empty);
         }
 
         [JsonPropertyName("call_date")]

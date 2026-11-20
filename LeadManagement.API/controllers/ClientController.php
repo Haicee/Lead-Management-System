@@ -60,7 +60,13 @@ class ClientController
 
             $client['files'] = $files;
             $client['file_count'] = count($files);
-            $client['total_leads'] = (int) array_sum(array_column($files, 'total_leads'));
+
+            // Total leads assigned to this client from centralized leads masterlist
+            $stmtMasterCount = $this->db->prepare("SELECT COUNT(*) FROM `leads` WHERE `client_id` = ?");
+            $stmtMasterCount->execute([$clientId]);
+            $masterCount = (int)$stmtMasterCount->fetchColumn();
+
+            $client['total_leads'] = $masterCount > 0 ? $masterCount : (int) array_sum(array_column($files, 'total_leads'));
 
             // 2. Assigned agents (Users with role = 'user' assigned to this client)
             $stmtAgents = $this->db->prepare("
@@ -556,24 +562,24 @@ class ClientController
             Response::notFound('Client not found.');
         }
 
-        // Query dedicated client_leads table
+        // Query centralized leads masterlist table first
         $stmtLeads = $this->db->prepare("
-            SELECT * FROM `client_leads` 
+            SELECT * FROM `leads` 
             WHERE `client_id` = ? 
             ORDER BY `id` ASC
         ");
         $stmtLeads->execute([$clientId]);
         $leads = $stmtLeads->fetchAll();
 
-        // Fallback to legacy leads if empty
+        // Fallback to client_leads if empty
         if (empty($leads)) {
-            $stmtLegacy = $this->db->prepare("
-                SELECT * FROM `leads` 
+            $stmtFallback = $this->db->prepare("
+                SELECT * FROM `client_leads` 
                 WHERE `client_id` = ? 
                 ORDER BY `id` ASC
             ");
-            $stmtLegacy->execute([$clientId]);
-            $leads = $stmtLegacy->fetchAll();
+            $stmtFallback->execute([$clientId]);
+            $leads = $stmtFallback->fetchAll();
         }
 
         Response::success([

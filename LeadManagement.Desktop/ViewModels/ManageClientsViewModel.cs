@@ -116,6 +116,8 @@ namespace LeadManagement.Desktop.ViewModels
             DeleteClientCommand  = new RelayCommand<ClientModel>(async c => await ExecuteDeleteClientAsync(c));
             DeleteFileCommand    = new RelayCommand<ClientFileModel>(async f => await ExecuteDeleteFileAsync(f));
             PreviewFileCommand   = new RelayCommand<ClientFileModel>(async f => await ExecutePreviewFileAsync(f));
+            ViewClientLeadsCommand = new RelayCommand<ClientModel>(async c => await ExecuteViewClientLeadsAsync(c));
+            ExportClientLeadsCommand = new RelayCommand<ClientModel>(async c => await ExecuteExportClientLeadsAsync(c));
             RefreshClientLeadsCommand = new RelayCommand<ClientModel>(async c => await LoadClientLeadsAsync(c));
             ClosePreviewCommand  = new RelayCommand(ExecuteClosePreview);
             DismissBannerCommand = new RelayCommand(ExecuteDismissBanner);
@@ -351,6 +353,8 @@ namespace LeadManagement.Desktop.ViewModels
         public ICommand DeleteClientCommand { get; }
         public ICommand DeleteFileCommand { get; }
         public ICommand PreviewFileCommand { get; }
+        public ICommand ViewClientLeadsCommand { get; }
+        public ICommand ExportClientLeadsCommand { get; }
         public ICommand RefreshClientLeadsCommand { get; }
         public ICommand ClosePreviewCommand { get; }
         public ICommand DismissBannerCommand { get; }
@@ -1229,6 +1233,165 @@ namespace LeadManagement.Desktop.ViewModels
             }
         }
 
+        // ----------------------------------------------------------------
+        // Centralized Masterlist: View all leads assigned to this client
+        // ----------------------------------------------------------------
+        private async Task ExecuteViewClientLeadsAsync(ClientModel? client)
+        {
+            if (client == null) return;
+
+            IsLoadingPreview = true;
+            IsPreviewOpen    = true;
+            PreviewTitle     = $"{client.FullName}'s Assigned Leads";
+            PreviewSubtitle  = $"{client.FullName}  ·  {client.TotalLeads:N0} leads assigned from Masterlist";
+            PreviewSearchText = string.Empty;
+            _allPreviewLeads.Clear();
+            FilteredPreviewLeads = new ObservableCollection<LeadModel>();
+
+            // Ensure Zoom is running in background while leads are being viewed
+            _ = Task.Run(() => ZoomPhoneService.EnsureZoomRunning());
+
+            try
+            {
+                var (ok, msg, leads) = await ApiService.Instance.GetClientLeadsAsync(client.Id);
+                if (ok && leads != null)
+                {
+                    _allPreviewLeads = leads;
+                    client.UpdateAssignedAgentNames();
+
+                    var agentNames = new ObservableCollection<string> { "" };
+
+                    if (client.AssignedAgents != null && client.AssignedAgents.Count > 0)
+                    {
+                        foreach (var a in client.AssignedAgents)
+                        {
+                            var name = !string.IsNullOrWhiteSpace(a.FullName) ? a.FullName.Trim() : a.Username.Trim();
+                            if (!string.IsNullOrWhiteSpace(name) && !agentNames.Contains(name))
+                            {
+                                agentNames.Add(name);
+                            }
+                        }
+                    }
+
+                    if (client.AssignedAgentNames != null)
+                    {
+                        foreach (var name in client.AssignedAgentNames)
+                        {
+                            if (!string.IsNullOrWhiteSpace(name) && !agentNames.Contains(name.Trim()))
+                            {
+                                agentNames.Add(name.Trim());
+                            }
+                        }
+                    }
+
+                    foreach (var lead in _allPreviewLeads)
+                    {
+                        if (!string.IsNullOrWhiteSpace(lead.AssignedAgent) && !agentNames.Contains(lead.AssignedAgent.Trim()))
+                        {
+                            agentNames.Add(lead.AssignedAgent.Trim());
+                        }
+                    }
+
+                    client.AssignedAgentNames = agentNames;
+
+                    foreach (var lead in _allPreviewLeads)
+                    {
+                        lead.AvailableAgentOptions = agentNames;
+                        lead.OnFieldChanged = (l, field) => SyncLeadField(l, field);
+                    }
+
+                    PreviewSubtitle  = $"{client.FullName}  ·  {_allPreviewLeads.Count:N0} leads assigned from Masterlist";
+                    ApplyPreviewSearch();
+                }
+                else
+                {
+                    ShowBanner($"Could not load client leads: {msg}", isError: true);
+                    IsPreviewOpen = false;
+                }
+            }
+            catch (Exception ex)
+            {
+                ShowBanner($"Preview error: {ex.Message}", isError: true);
+                IsPreviewOpen = false;
+            }
+            finally
+            {
+                IsLoadingPreview = false;
+            }
+        }
+
+        private async Task ExecuteExportClientLeadsAsync(ClientModel? client)
+        {
+            if (client == null) return;
+            var (ok, msg, leads) = await ApiService.Instance.GetClientLeadsAsync(client.Id);
+            if (!ok || leads == null || leads.Count == 0)
+            {
+                ShowBanner(string.IsNullOrWhiteSpace(msg) ? "No leads to export for this client." : msg, isError: true);
+                return;
+            }
+
+            var saveDlg = new SaveFileDialog
+            {
+                FileName = $"{client.FullName}_Leads_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx",
+                Filter = "Excel Workbook (*.xlsx)|*.xlsx",
+                Title = "Export Client Leads to Excel"
+            };
+
+            if (saveDlg.ShowDialog() != true) return;
+
+            var savePath = saveDlg.FileName;
+            try
+            {
+                using var workbook = new XLWorkbook();
+                var ws = workbook.Worksheets.Add("Leads");
+
+                string[] headers = new[]
+                {
+                    "DATE", "CALL DISPOSITION", "AGENT", "NOTES", "# OF CALL",
+                    "CELL NUMBER", "BUSINESS NAME", "ADDRESS", "CITY", "COUNTY",
+                    "STATE", "ZIP CODE", "EMAIL", "STATUS"
+                };
+
+                for (int c = 0; c < headers.Length; c++)
+                {
+                    var cell = ws.Cell(1, c + 1);
+                    cell.SetValue(headers[c]);
+                    cell.Style.Font.Bold = true;
+                    cell.Style.Fill.BackgroundColor = XLColor.FromHtml("#1E293B");
+                    cell.Style.Font.FontColor = XLColor.White;
+                }
+
+                int row = 2;
+                foreach (var l in leads)
+                {
+                    ws.Cell(row, 1).SetValue(l.CallDate);
+                    ws.Cell(row, 2).SetValue(l.CallDisposition);
+                    ws.Cell(row, 3).SetValue(l.AssignedAgent);
+                    ws.Cell(row, 4).SetValue(l.Notes);
+                    ws.Cell(row, 5).SetValue(l.CallCount);
+                    ws.Cell(row, 6).SetValue(l.CellNumber);
+                    ws.Cell(row, 7).SetValue(l.BusinessName);
+                    ws.Cell(row, 8).SetValue(l.Address);
+                    ws.Cell(row, 9).SetValue(l.City);
+                    ws.Cell(row, 10).SetValue(l.County);
+                    ws.Cell(row, 11).SetValue(l.State);
+                    ws.Cell(row, 12).SetValue(l.ZipCode);
+                    ws.Cell(row, 13).SetValue(l.Email);
+                    ws.Cell(row, 14).SetValue(l.Status);
+                    row++;
+                }
+
+                ws.Columns().AdjustToContents();
+                workbook.SaveAs(savePath);
+
+                ShowBanner($"Successfully exported {leads.Count:N0} leads for {client.FullName}!");
+            }
+            catch (Exception ex)
+            {
+                ShowBanner($"Export failed: {ex.Message}", isError: true);
+            }
+        }
+
         private void ApplyPreviewSearch()
         {
             var q = PreviewSearchText?.Trim() ?? string.Empty;
@@ -1364,7 +1527,7 @@ namespace LeadManagement.Desktop.ViewModels
         // ----------------------------------------------------------------
         private void ExecuteDismissBanner() => IsBannerVisible = false;
 
-        private void ShowBanner(string message, bool isError)
+        private void ShowBanner(string message, bool isError = false)
         {
             StatusBannerMessage = message;
             IsBannerError       = isError;

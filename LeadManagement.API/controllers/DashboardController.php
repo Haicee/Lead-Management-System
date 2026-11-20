@@ -28,9 +28,12 @@ class DashboardController
     public function stats(): void
     {
         try {
-            $masterlistLeads = (int) $this->db->query("SELECT COUNT(*) FROM `leads`")->fetchColumn();
-            $clientLeads = (int) $this->db->query("SELECT COUNT(*) FROM `client_leads`")->fetchColumn();
-            $totalLeads = $masterlistLeads + $clientLeads;
+            // All leads now live in the centralized `leads` table
+            $totalLeads = (int) $this->db->query("SELECT COUNT(*) FROM `leads`")->fetchColumn();
+            // Assigned = leads that have been assigned to a client
+            $clientLeads = (int) $this->db->query("SELECT COUNT(*) FROM `leads` WHERE client_id IS NOT NULL")->fetchColumn();
+            // Legacy client_leads table (kept for backward compat but no longer primary)
+            $masterlistLeads = $totalLeads;
 
             $totalClients = (int) $this->db->query("SELECT COUNT(*) FROM `clients`")->fetchColumn();
             $totalUsers = (int) $this->db->query("SELECT COUNT(*) FROM `users`")->fetchColumn();

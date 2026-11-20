@@ -126,6 +126,12 @@ try {
         $controller->query($input);
     }
 
+    elseif (($path === 'leads/assign' || $path === 'leads/assign-client') && $method === 'POST') {
+        require_once __DIR__ . '/controllers/LeadController.php';
+        $controller = new LeadController();
+        $controller->assignToClient($input);
+    }
+
     elseif (($path === 'leads/update' && $method === 'POST') || (preg_match('#^leads/(\d+)$#', $path, $matches) && ($method === 'POST' || $method === 'PUT'))) {
         require_once __DIR__ . '/controllers/LeadController.php';
         $controller = new LeadController();

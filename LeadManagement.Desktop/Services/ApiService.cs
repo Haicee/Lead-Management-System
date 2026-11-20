@@ -633,6 +633,44 @@ namespace LeadManagement.Desktop.Services
             catch (Exception ex) { return (false, $"Error uploading file: {ex.Message}", null); }
         }
 
+        /// <summary>
+        /// Centralized masterlist assignment: Assigns leads to a chosen client via POST /leads/assign.
+        /// Can assign either explicit lead IDs or all matching query filters.
+        /// </summary>
+        public async Task<(bool Success, string Message, int AssignedCount)> AssignLeadsToClientAsync(
+            int clientId,
+            System.Collections.Generic.IEnumerable<int>? leadIds = null,
+            object? filters = null)
+        {
+            try
+            {
+                var payload = new
+                {
+                    client_id = clientId,
+                    lead_ids = leadIds,
+                    filters = filters
+                };
+                var json = JsonSerializer.Serialize(payload);
+                var content = new StringContent(json, Encoding.UTF8, "application/json");
+                var response = await _httpClient.PostAsync("leads/assign", content);
+                var responseBody = await response.Content.ReadAsStringAsync();
+                var result = JsonSerializer.Deserialize<ApiResponse<JsonElement>>(responseBody);
+                if (result == null) return (false, "Unable to parse server response.", 0);
+
+                int assignedCount = 0;
+                if (result.Data.ValueKind == JsonValueKind.Object &&
+                    result.Data.TryGetProperty("assigned_count", out var countProp) &&
+                    countProp.TryGetInt32(out var count))
+                {
+                    assignedCount = count;
+                }
+
+                return (result.Success, result.Message, assignedCount);
+            }
+            catch (HttpRequestException) { return (false, "Cannot connect to server. Please ensure XAMPP Apache & MySQL are running.", 0); }
+            catch (Exception ex) { return (false, $"Error assigning leads: {ex.Message}", 0); }
+        }
+
         /// <summary>Assigns agents to a client via POST /clients/{id}/assign.</summary>
         public async Task<(bool Success, string Message)> AssignAgentsToClientAsync(int clientId, System.Collections.Generic.IEnumerable<int> agentIds)
         {
