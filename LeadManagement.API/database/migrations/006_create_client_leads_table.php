@@ -54,33 +54,38 @@ return new class {
         ");
 
         // 2. Migrate existing leads that belonged to client_files into client_leads
-        $db->exec("
-            INSERT INTO `client_leads` (
-                client_id, file_id, call_date, call_disposition, assigned_agent_id, assigned_agent,
-                notes, call_count, status, business_name, address, city, county, state, zip_code,
-                cell_number, fax, email, annual_sales, number_of_employees, title, contact_name,
-                website, sic_code, sic_description, naics_code, naics_description, created_at
-            )
-            SELECT 
-                cf.client_id, cf.id, COALESCE(l.call_date, DATE_FORMAT(l.created_at, '%m/%d/%y')),
-                COALESCE(l.call_disposition, ''), l.assigned_agent_id, COALESCE(l.assigned_agent, ''),
-                l.notes, COALESCE(l.call_count, 1), l.status, l.business_name, l.address, l.city,
-                l.county, l.state, l.zip_code, l.cell_number, l.fax, '', l.annual_sales,
-                l.number_of_employees, l.title, l.contact_name, l.website, l.sic_code,
-                l.sic_description, l.naics_code, l.naics_description, l.created_at
-            FROM `leads` l
-            INNER JOIN `client_files` cf ON l.batch_id = cf.batch_id
-        ");
+        //    Only runs if the leads table has the legacy columns (older schema).
+        //    On a fresh install these columns don't exist, so we skip safely.
+        $cols = $db->query("SHOW COLUMNS FROM `leads` LIKE 'call_date'")->fetchAll();
+        if (!empty($cols)) {
+            $db->exec("
+                INSERT INTO `client_leads` (
+                    client_id, file_id, call_date, call_disposition, assigned_agent_id, assigned_agent,
+                    notes, call_count, status, business_name, address, city, county, state, zip_code,
+                    cell_number, fax, email, annual_sales, number_of_employees, title, contact_name,
+                    website, sic_code, sic_description, naics_code, naics_description, created_at
+                )
+                SELECT 
+                    cf.client_id, cf.id, COALESCE(l.call_date, DATE_FORMAT(l.created_at, '%m/%d/%y')),
+                    COALESCE(l.call_disposition, ''), l.assigned_agent_id, COALESCE(l.assigned_agent, ''),
+                    l.notes, COALESCE(l.call_count, 1), l.status, l.business_name, l.address, l.city,
+                    l.county, l.state, l.zip_code, l.cell_number, l.fax, '', l.annual_sales,
+                    l.number_of_employees, l.title, l.contact_name, l.website, l.sic_code,
+                    l.sic_description, l.naics_code, l.naics_description, l.created_at
+                FROM `leads` l
+                INNER JOIN `client_files` cf ON l.batch_id = cf.batch_id
+            ");
 
-        // 3. Remove client uploaded leads from main leads table and batch history so they don't pollute the masterlist
-        $db->exec("
-            DELETE l FROM `leads` l
-            INNER JOIN `client_files` cf ON l.batch_id = cf.batch_id
-        ");
-        $db->exec("
-            DELETE b FROM `import_batches` b
-            INNER JOIN `client_files` cf ON b.id = cf.batch_id
-        ");
+            // 3. Remove client uploaded leads from main leads table and batch history so they don't pollute the masterlist
+            $db->exec("
+                DELETE l FROM `leads` l
+                INNER JOIN `client_files` cf ON l.batch_id = cf.batch_id
+            ");
+            $db->exec("
+                DELETE b FROM `import_batches` b
+                INNER JOIN `client_files` cf ON b.id = cf.batch_id
+            ");
+        }
     }
 
     public function down(PDO $db): void
