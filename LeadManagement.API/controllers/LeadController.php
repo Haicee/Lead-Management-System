@@ -275,6 +275,39 @@ class LeadController
         $stmt->execute($params);
         $leads = $stmt->fetchAll();
 
+        // Attach all assigned clients for each lead in the current page
+        if (!empty($leads)) {
+            $leadIds = array_map(fn($r) => (int)$r['id'], $leads);
+            $placeholders = implode(',', array_fill(0, count($leadIds), '?'));
+            $stmtAssign = $this->db->prepare("
+                SELECT lca.lead_id, CONCAT(TRIM(COALESCE(c.first_name, '')), ' ', TRIM(COALESCE(c.last_name, ''))) AS client_full_name
+                FROM `lead_client_assignments` lca
+                INNER JOIN `clients` c ON lca.client_id = c.id
+                WHERE lca.lead_id IN ({$placeholders})
+                ORDER BY lca.id ASC
+            ");
+            $stmtAssign->execute($leadIds);
+            $assignMap = [];
+            foreach ($stmtAssign->fetchAll() as $row) {
+                $lid = (int)$row['lead_id'];
+                $cname = trim($row['client_full_name']);
+                if ($cname !== '') {
+                    $assignMap[$lid][] = $cname;
+                }
+            }
+
+            foreach ($leads as &$lead) {
+                $lid = (int)$lead['id'];
+                $names = $assignMap[$lid] ?? [];
+                if (empty($names) && !empty(trim((string)($lead['client_name'] ?? '')))) {
+                    $names = [trim((string)$lead['client_name'])];
+                }
+                $lead['assigned_clients'] = $names;
+                $lead['client_name'] = $names[0] ?? '';
+            }
+            unset($lead);
+        }
+
         Response::success([
             'total'  => $totalCount,
             'limit'  => $limit,
@@ -312,6 +345,7 @@ class LeadController
         if (isset($input['client_id']) && $input['client_id'] !== '' && $input['client_id'] !== null) {
             $clients[] = (string)$input['client_id'];
         }
+        $agents = $this->normalizeArray($input['agents'] ?? $input['agent'] ?? []);
 
         // Sorting
         $sortMap = [
@@ -348,6 +382,8 @@ class LeadController
             'created_at' => 'l.created_at',
             'calldate' => 'l.call_date',
             'call_date' => 'l.call_date',
+            'selecteddate' => 'l.call_date',
+            'email' => 'l.email',
             'calldisposition' => 'l.call_disposition',
             'call_disposition' => 'l.call_disposition',
             'assignedagent' => 'l.assigned_agent',
@@ -395,17 +431,17 @@ class LeadController
         $addInCondition('naics_code', $naicsCodes);
         $addInCondition('naics_description', $naicsDescs);
 
-        // Client filter (supports "Unassigned" / -1, or client ID/name)
+        // Client filter (supports "Unassigned" / -1, or client ID/name via multi-client junction table)
         if (!empty($clients)) {
             $clientClauses = [];
             foreach ($clients as $cVal) {
                 if ($cVal === 'Unassigned' || $cVal === '-1' || $cVal === 'unassigned') {
-                    $clientClauses[] = "(l.`client_id` IS NULL OR l.`client_id` = 0)";
+                    $clientClauses[] = "NOT EXISTS (SELECT 1 FROM `lead_client_assignments` lca_u WHERE lca_u.`lead_id` = l.`id`)";
                 } elseif (is_numeric($cVal) && (int)$cVal > 0) {
-                    $clientClauses[] = "l.`client_id` = ?";
+                    $clientClauses[] = "EXISTS (SELECT 1 FROM `lead_client_assignments` lca_c WHERE lca_c.`lead_id` = l.`id` AND lca_c.`client_id` = ?)";
                     $params[] = (int)$cVal;
                 } elseif (is_string($cVal) && !empty($cVal) && !str_starts_with($cVal, 'All ')) {
-                    $clientClauses[] = "CONCAT(TRIM(COALESCE(c.first_name, '')), ' ', TRIM(COALESCE(c.last_name, ''))) = ?";
+                    $clientClauses[] = "EXISTS (SELECT 1 FROM `lead_client_assignments` lca_c INNER JOIN `clients` c_f ON lca_c.`client_id` = c_f.`id` WHERE lca_c.`lead_id` = l.`id` AND CONCAT(TRIM(COALESCE(c_f.first_name, '')), ' ', TRIM(COALESCE(c_f.last_name, ''))) = ?)";
                     $params[] = $cVal;
                 }
             }
@@ -414,9 +450,26 @@ class LeadController
             }
         }
 
+        // Agent filter (supports "Unassigned" or agent name)
+        if (!empty($agents)) {
+            $agentClauses = [];
+            foreach ($agents as $aVal) {
+                $aVal = trim((string)$aVal);
+                if ($aVal === 'Unassigned' || $aVal === 'unassigned') {
+                    $agentClauses[] = "(l.`assigned_agent` IS NULL OR l.`assigned_agent` = '')";
+                } elseif ($aVal !== '' && !str_starts_with($aVal, 'All ')) {
+                    $agentClauses[] = "l.`assigned_agent` = ?";
+                    $params[] = $aVal;
+                }
+            }
+            if (!empty($agentClauses)) {
+                $conditions[] = "(" . implode(' OR ', $agentClauses) . ")";
+            }
+        }
+
         if (!empty($search)) {
             $term = '%' . $search . '%';
-            $conditions[] = "(l.`business_name` LIKE ? OR l.`contact_name` LIKE ? OR l.`cell_number` LIKE ? OR l.`city` LIKE ? OR l.`county` LIKE ? OR l.`address` LIKE ? OR l.`zip_code` LIKE ? OR l.`sic_code` LIKE ? OR l.`sic_description` LIKE ? OR l.`naics_code` LIKE ? OR l.`naics_description` LIKE ? OR l.`title` LIKE ? OR l.`notes` LIKE ? OR l.`assigned_agent` LIKE ? OR l.`call_disposition` LIKE ? OR CONCAT(TRIM(COALESCE(c.first_name, '')), ' ', TRIM(COALESCE(c.last_name, ''))) LIKE ?)";
+            $conditions[] = "(l.`business_name` LIKE ? OR l.`contact_name` LIKE ? OR l.`cell_number` LIKE ? OR l.`city` LIKE ? OR l.`county` LIKE ? OR l.`address` LIKE ? OR l.`zip_code` LIKE ? OR l.`sic_code` LIKE ? OR l.`sic_description` LIKE ? OR l.`naics_code` LIKE ? OR l.`naics_description` LIKE ? OR l.`title` LIKE ? OR l.`notes` LIKE ? OR l.`assigned_agent` LIKE ? OR l.`call_disposition` LIKE ? OR EXISTS (SELECT 1 FROM `lead_client_assignments` lca_s INNER JOIN `clients` c_s ON lca_s.`client_id` = c_s.`id` WHERE lca_s.`lead_id` = l.`id` AND CONCAT(TRIM(COALESCE(c_s.first_name, '')), ' ', TRIM(COALESCE(c_s.last_name, ''))) LIKE ?))";
             for ($k = 0; $k < 16; $k++) {
                 $params[] = $term;
             }
@@ -454,6 +507,39 @@ class LeadController
         $stmt->execute($params);
         $leads = $stmt->fetchAll();
 
+        // Attach all assigned clients for each lead in the current page
+        if (!empty($leads)) {
+            $leadIds = array_map(fn($r) => (int)$r['id'], $leads);
+            $placeholders = implode(',', array_fill(0, count($leadIds), '?'));
+            $stmtAssign = $this->db->prepare("
+                SELECT lca.lead_id, CONCAT(TRIM(COALESCE(c.first_name, '')), ' ', TRIM(COALESCE(c.last_name, ''))) AS client_full_name
+                FROM `lead_client_assignments` lca
+                INNER JOIN `clients` c ON lca.client_id = c.id
+                WHERE lca.lead_id IN ({$placeholders})
+                ORDER BY lca.id ASC
+            ");
+            $stmtAssign->execute($leadIds);
+            $assignMap = [];
+            foreach ($stmtAssign->fetchAll() as $row) {
+                $lid = (int)$row['lead_id'];
+                $cname = trim($row['client_full_name']);
+                if ($cname !== '') {
+                    $assignMap[$lid][] = $cname;
+                }
+            }
+
+            foreach ($leads as &$lead) {
+                $lid = (int)$lead['id'];
+                $names = $assignMap[$lid] ?? [];
+                if (empty($names) && !empty(trim((string)($lead['client_name'] ?? '')))) {
+                    $names = [trim((string)$lead['client_name'])];
+                }
+                $lead['assigned_clients'] = $names;
+                $lead['client_name'] = $names[0] ?? '';
+            }
+            unset($lead);
+        }
+
         Response::success([
             'total'          => $totalAll,
             'filtered_total' => $filteredTotal,
@@ -488,6 +574,7 @@ class LeadController
         $annualSales = $this->db->query("SELECT DISTINCT `annual_sales` FROM `leads` WHERE `annual_sales` IS NOT NULL AND `annual_sales` != '' ORDER BY `annual_sales` ASC")->fetchAll(PDO::FETCH_COLUMN);
         $naicsCodes = $this->db->query("SELECT DISTINCT `naics_code` FROM `leads` WHERE `naics_code` IS NOT NULL AND `naics_code` != '' ORDER BY `naics_code` ASC")->fetchAll(PDO::FETCH_COLUMN);
         $naicsDescs = $this->db->query("SELECT DISTINCT `naics_description` FROM `leads` WHERE `naics_description` IS NOT NULL AND `naics_description` != '' ORDER BY `naics_description` ASC")->fetchAll(PDO::FETCH_COLUMN);
+        $agents = $this->db->query("SELECT DISTINCT `assigned_agent` FROM `leads` WHERE `assigned_agent` IS NOT NULL AND `assigned_agent` != '' ORDER BY `assigned_agent` ASC")->fetchAll(PDO::FETCH_COLUMN);
         
         // Return available clients for the Masterlist client filter and assignment
         $clients = $this->db->query("SELECT `id`, CONCAT(TRIM(`first_name`), ' ', TRIM(`last_name`)) AS `name` FROM `clients` ORDER BY `first_name` ASC, `last_name` ASC")->fetchAll();
@@ -503,6 +590,7 @@ class LeadController
             'annual_sales'       => $annualSales,
             'naics_codes'        => $naicsCodes,
             'naics_descriptions' => $naicsDescs,
+            'agents'             => $agents,
             'clients'            => $clients
         ], 'Filter options retrieved');
     }
@@ -769,6 +857,17 @@ class LeadController
                 $params = array_merge([$clientId, $listId], $chunk);
                 $stmt->execute($params);
                 $totalUpdated += $stmt->rowCount();
+
+                // Record in multi-client junction table
+                $valueTuples = implode(',', array_fill(0, count($chunk), '(?, ?, ?)'));
+                $insSql = "INSERT INTO `lead_client_assignments` (`lead_id`, `client_id`, `client_list_id`) VALUES {$valueTuples} ON DUPLICATE KEY UPDATE `client_list_id` = VALUES(`client_list_id`)";
+                $insParams = [];
+                foreach ($chunk as $lid) {
+                    $insParams[] = $lid;
+                    $insParams[] = $clientId;
+                    $insParams[] = $listId;
+                }
+                $this->db->prepare($insSql)->execute($insParams);
             }
 
             if ($totalUpdated === 0) {
@@ -848,13 +947,28 @@ class LeadController
 
         [$listId, $listName] = $createClientList($clientId);
 
+        // Insert into multi-client junction table for all matching leads
+        $insSql = "INSERT INTO `lead_client_assignments` (`lead_id`, `client_id`, `client_list_id`)
+                   SELECT `id`, ?, ? FROM `leads` {$whereClause}
+                   ON DUPLICATE KEY UPDATE `client_list_id` = VALUES(`client_list_id`)";
+        $insStmt = $this->db->prepare($insSql);
+        $insStmt->execute(array_merge([$clientId, $listId], $params));
+
         $sql = "UPDATE `leads` SET `client_id` = ?, `client_list_id` = ? {$whereClause}";
         $stmt = $this->db->prepare($sql);
         $stmt->execute(array_merge([$clientId, $listId], $params));
-        $affected = $stmt->rowCount();
+        $affected = max($stmt->rowCount(), $insStmt->rowCount());
 
         if ($affected === 0) {
-            $this->db->prepare("DELETE FROM `client_lists` WHERE `id` = ?")->execute([$listId]);
+            // Check if leads actually matched (e.g. if already assigned to same client)
+            $chkStmt = $this->db->prepare("SELECT COUNT(*) FROM `leads` {$whereClause}");
+            $chkStmt->execute($params);
+            $matchedCount = (int)$chkStmt->fetchColumn();
+            if ($matchedCount === 0) {
+                $this->db->prepare("DELETE FROM `client_lists` WHERE `id` = ?")->execute([$listId]);
+            } else {
+                $affected = $matchedCount;
+            }
         }
 
         ActivityLogger::log(
@@ -870,5 +984,178 @@ class LeadController
             'list_id'        => $listId,
             'list_name'      => $listName
         ], "Successfully assigned {$affected} lead(s) to {$clientName} ({$listName}).");
+    }
+
+    /**
+     * GET /leads/{id}/history
+     *
+     * Returns all assigned clients and call history entries for a specific lead.
+     */
+    public function history(int $leadId): void
+    {
+        if ($leadId <= 0) {
+            Response::error('Invalid lead ID.', 422);
+        }
+
+        $stmtClients = $this->db->prepare("
+            SELECT c.id, CONCAT(TRIM(COALESCE(c.first_name, '')), ' ', TRIM(COALESCE(c.last_name, ''))) AS full_name,
+                   cl.list_name, lca.created_at AS assigned_at
+            FROM `lead_client_assignments` lca
+            INNER JOIN `clients` c ON lca.client_id = c.id
+            LEFT JOIN `client_lists` cl ON lca.client_list_id = cl.id
+            WHERE lca.lead_id = ?
+            ORDER BY lca.id ASC
+        ");
+        $stmtClients->execute([$leadId]);
+        $assignedClients = $stmtClients->fetchAll();
+
+        $stmtHistory = $this->db->prepare("
+            SELECT lch.id, lch.lead_id, lch.agent_id, lch.agent_name, lch.client_names,
+                   lch.call_disposition, lch.notes, lch.call_number, lch.called_at
+            FROM `lead_call_history` lch
+            LEFT JOIN `users` u ON lch.agent_id = u.id
+            WHERE lch.`lead_id` = ?
+              AND (u.role IS NULL OR u.role != 'admin')
+              AND lch.`agent_name` != 'System Administrator'
+            ORDER BY lch.`called_at` DESC, lch.`id` DESC
+        ");
+        $stmtHistory->execute([$leadId]);
+        $history = $stmtHistory->fetchAll();
+
+        Response::success([
+            'lead_id'          => $leadId,
+            'assigned_clients' => $assignedClients,
+            'history'          => $history
+        ], 'Lead history retrieved successfully');
+    }
+
+    /**
+     * POST /leads/{id}/call-history
+     *
+     * Records a call history entry for a lead, capturing the calling agent
+     * and a snapshot of all clients assigned to the lead.
+     */
+    public function logCallHistory(int $leadId, array $input): void
+    {
+        if ($leadId <= 0) {
+            Response::error('Invalid lead ID.', 422);
+        }
+
+        $agentId = !empty($input['agent_id']) ? (int)$input['agent_id'] : null;
+        $agentName = trim((string)($input['agent_name'] ?? ''));
+
+        // Call history is intended for agents only — do not record admin calls
+        if ($agentId !== null) {
+            $stmtRole = $this->db->prepare("SELECT `role` FROM `users` WHERE `id` = ?");
+            $stmtRole->execute([$agentId]);
+            $role = $stmtRole->fetchColumn();
+            if ($role === 'admin') {
+                Response::success(null, 'Admin call skipped from agent history');
+                return;
+            }
+        }
+        if ($agentName === '' || strcasecmp($agentName, 'System Administrator') === 0) {
+            Response::success(null, 'Admin call skipped from agent history');
+            return;
+        }
+        $disposition = trim((string)($input['call_disposition'] ?? ''));
+        $notes = (string)($input['notes'] ?? '');
+        $callNumber = isset($input['call_number']) ? (int)$input['call_number'] : 1;
+        $specificClient = trim((string)($input['client_name'] ?? ''));
+
+        if ($specificClient !== '') {
+            $clientNames = $specificClient;
+        } else {
+            // Fallback: snapshot currently assigned clients for this lead
+            $stmtClients = $this->db->prepare("
+                SELECT CONCAT(TRIM(COALESCE(c.first_name, '')), ' ', TRIM(COALESCE(c.last_name, ''))) AS full_name
+                FROM `lead_client_assignments` lca
+                INNER JOIN `clients` c ON lca.client_id = c.id
+                WHERE lca.lead_id = ?
+                ORDER BY lca.id ASC
+            ");
+            $stmtClients->execute([$leadId]);
+            $clientList = array_values(array_filter(array_map('trim', $stmtClients->fetchAll(PDO::FETCH_COLUMN))));
+            $clientNames = !empty($clientList) ? implode(', ', $clientList) : 'Unassigned';
+        }
+
+        $stmt = $this->db->prepare("
+            INSERT INTO `lead_call_history`
+                (`lead_id`, `agent_id`, `agent_name`, `client_names`, `call_disposition`, `notes`, `call_number`)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        ");
+        $stmt->execute([$leadId, $agentId, $agentName, $clientNames, $disposition, $notes, $callNumber]);
+        $newId = (int)$this->db->lastInsertId();
+
+        $fetch = $this->db->prepare("SELECT * FROM `lead_call_history` WHERE `id` = ?");
+        $fetch->execute([$newId]);
+        $entry = $fetch->fetch();
+
+        Response::success($entry, 'Call history recorded');
+    }
+
+    /**
+     * POST /leads/{id}/call-history/update
+     *
+     * Updates disposition and/or notes on the active call history entry in real time
+     * after the agent dials and then selects a disposition or writes notes.
+     */
+    public function updateCallHistory(int $leadId, array $input): void
+    {
+        if ($leadId <= 0) {
+            Response::error('Invalid lead ID.', 422);
+        }
+
+        $historyId = !empty($input['history_id']) ? (int)$input['history_id'] : 0;
+        $agentId = !empty($input['agent_id']) ? (int)$input['agent_id'] : 0;
+
+        if ($historyId <= 0) {
+            if ($agentId > 0) {
+                $stmtLatest = $this->db->prepare("
+                    SELECT `id` FROM `lead_call_history`
+                    WHERE `lead_id` = ? AND `agent_id` = ?
+                    ORDER BY `id` DESC LIMIT 1
+                ");
+                $stmtLatest->execute([$leadId, $agentId]);
+            } else {
+                $stmtLatest = $this->db->prepare("
+                    SELECT `id` FROM `lead_call_history`
+                    WHERE `lead_id` = ?
+                    ORDER BY `id` DESC LIMIT 1
+                ");
+                $stmtLatest->execute([$leadId]);
+            }
+            $historyId = (int)$stmtLatest->fetchColumn();
+        }
+
+        if ($historyId <= 0) {
+            Response::success(null, 'No call history entry to update');
+            return;
+        }
+
+        $fields = [];
+        $params = [];
+        if (array_key_exists('call_disposition', $input)) {
+            $fields[] = "`call_disposition` = ?";
+            $params[] = trim((string)($input['call_disposition'] ?? ''));
+        }
+        if (array_key_exists('notes', $input)) {
+            $fields[] = "`notes` = ?";
+            $params[] = (string)($input['notes'] ?? '');
+        }
+
+        if (empty($fields)) {
+            Response::success(null, 'Nothing to update');
+            return;
+        }
+
+        $params[] = $historyId;
+        $params[] = $leadId;
+        $sql = "UPDATE `lead_call_history` SET " . implode(', ', $fields) . " WHERE `id` = ? AND `lead_id` = ?";
+        $this->db->prepare($sql)->execute($params);
+
+        $fetch = $this->db->prepare("SELECT * FROM `lead_call_history` WHERE `id` = ?");
+        $fetch->execute([$historyId]);
+        Response::success($fetch->fetch(), 'Call history updated');
     }
 }

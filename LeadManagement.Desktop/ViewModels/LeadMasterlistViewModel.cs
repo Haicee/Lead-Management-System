@@ -50,6 +50,9 @@ namespace LeadManagement.Desktop.ViewModels
             LastPageCommand = new RelayCommand(() => GoToPage(TotalPages), () => HasNextPage);
 
             CallLeadCommand = new RelayCommand<LeadModel>(ExecuteCallLead);
+            OpenLeadProfileCommand = new RelayCommand<LeadModel>(async l => await ExecuteOpenLeadProfileAsync(l));
+            CloseLeadProfileCommand = new RelayCommand(() => IsLeadProfileModalOpen = false);
+            UpdateLeadProfileCommand = new RelayCommand(async () => await ExecuteUpdateLeadProfileAsync(), () => HasProfileChanges && !IsSavingProfile);
             OpenAssignClientModalCommand = new RelayCommand(ExecuteOpenAssignClientModal);
             CloseAssignClientModalCommand = new RelayCommand(() => IsAssignClientModalOpen = false);
             ConfirmAssignClientCommand = new RelayCommand(async () => await ExecuteConfirmAssignClientAsync(), () => !IsAssigning && SelectedTargetClient != null);
@@ -189,6 +192,7 @@ namespace LeadManagement.Desktop.ViewModels
         // ─── Multi-Select Filter Collections (ObservableCollection<FilterItem>) ───
 
         public ObservableCollection<FilterItem> ClientItems { get; } = new();
+        public ObservableCollection<FilterItem> AgentFilterItems { get; } = new();
         public ObservableCollection<ClientModel> AvailableClients { get; } = new();
         public ObservableCollection<string> AllAgentOptions { get; } = new() { "" };
         public ObservableCollection<FilterItem> CityItems { get; } = new();
@@ -281,6 +285,9 @@ namespace LeadManagement.Desktop.ViewModels
         }
 
         public ICommand CallLeadCommand { get; }
+        public ICommand OpenLeadProfileCommand { get; }
+        public ICommand CloseLeadProfileCommand { get; }
+        public ICommand UpdateLeadProfileCommand { get; }
         public ICommand OpenAssignClientModalCommand { get; }
         public ICommand CloseAssignClientModalCommand { get; }
         public ICommand ConfirmAssignClientCommand { get; }
@@ -303,6 +310,7 @@ namespace LeadManagement.Desktop.ViewModels
         public bool HasActiveFilters =>
             !string.IsNullOrWhiteSpace(SearchText) ||
             ClientItems.Any(i => i.IsSelected) ||
+            AgentFilterItems.Any(i => i.IsSelected) ||
             CityItems.Any(i => i.IsSelected) ||
             CountyItems.Any(i => i.IsSelected) ||
             StateItems.Any(i => i.IsSelected) ||
@@ -490,6 +498,7 @@ namespace LeadManagement.Desktop.ViewModels
         private LeadQueryRequest BuildQueryRequest(int limit, int offset)
         {
             var clients = GetSelected(ClientItems);
+            var agents = GetSelected(AgentFilterItems);
             var cities = GetSelected(CityItems);
             var counties = GetSelected(CountyItems);
             var states = GetSelected(StateItems);
@@ -508,6 +517,7 @@ namespace LeadManagement.Desktop.ViewModels
                 SortBy = _sortBy,
                 SortDirection = _sortDirection,
                 Clients = clients.Count > 0 ? clients : null,
+                Agents = agents.Count > 0 ? agents : null,
                 Cities = cities.Count > 0 ? cities : null,
                 Counties = counties.Count > 0 ? counties : null,
                 States = states.Count > 0 ? states : null,
@@ -546,6 +556,7 @@ namespace LeadManagement.Desktop.ViewModels
                 OnPropertyChanged(nameof(SearchText));
 
                 foreach (var item in ClientItems) item.IsSelected = false;
+                foreach (var item in AgentFilterItems) item.IsSelected = false;
                 foreach (var item in CityItems) item.IsSelected = false;
                 foreach (var item in CountyItems) item.IsSelected = false;
                 foreach (var item in StateItems) item.IsSelected = false;
@@ -622,8 +633,9 @@ namespace LeadManagement.Desktop.ViewModels
                     }
                 }
 
-                // 2. Populate available agents for the AGENT column dropdown
+                // 2. Populate available agents for the AGENT column dropdown and Agents filter
                 var (usersOk, _, userList) = await ApiService.Instance.GetUsersAsync();
+                var agentFilterNames = new List<string> { "Unassigned" };
                 if (usersOk && userList != null)
                 {
                     AllAgentOptions.Clear();
@@ -634,9 +646,24 @@ namespace LeadManagement.Desktop.ViewModels
                         if (!string.IsNullOrWhiteSpace(name) && !AllAgentOptions.Contains(name))
                         {
                             AllAgentOptions.Add(name);
+                            if (u.Role == "user" && !agentFilterNames.Contains(name, StringComparer.OrdinalIgnoreCase))
+                            {
+                                agentFilterNames.Add(name);
+                            }
                         }
                     }
                 }
+                if (filters.Agents != null)
+                {
+                    foreach (var a in filters.Agents)
+                    {
+                        if (!string.IsNullOrWhiteSpace(a) && !agentFilterNames.Contains(a.Trim(), StringComparer.OrdinalIgnoreCase))
+                        {
+                            agentFilterNames.Add(a.Trim());
+                        }
+                    }
+                }
+                LoadItems(AgentFilterItems, agentFilterNames);
             }
             catch (Exception ex)
             {
@@ -678,6 +705,20 @@ namespace LeadManagement.Desktop.ViewModels
                 };
 
                 await ApiService.Instance.UpdateLeadAsync(lead.Id, payload);
+
+                if (field == "call_disposition" || field == "notes")
+                {
+                    var currentUser = ApiService.Instance.CurrentUser;
+                    if (currentUser != null && !string.Equals(currentUser.Role, "admin", StringComparison.OrdinalIgnoreCase))
+                    {
+                        await ApiService.Instance.UpdateLeadCallHistoryAsync(
+                            lead.Id,
+                            lead.LastCallHistoryId,
+                            currentUser.Id,
+                            lead.CallDisposition,
+                            lead.Notes);
+                    }
+                }
             }
             catch (Exception ex)
             {
@@ -693,6 +734,380 @@ namespace LeadManagement.Desktop.ViewModels
             SyncLeadField(lead, "call_count");
             SyncLeadField(lead, "call_date");
             ZoomPhoneService.Dial(lead.CellNumber);
+
+            var currentUser = ApiService.Instance.CurrentUser;
+            if (currentUser != null && !string.Equals(currentUser.Role, "admin", StringComparison.OrdinalIgnoreCase))
+            {
+                var callerName = !string.IsNullOrWhiteSpace(currentUser.FullName)
+                    ? currentUser.FullName.Trim()
+                    : currentUser.Username.Trim();
+
+                _ = Task.Run(async () =>
+                {
+                    var (ok, _, entry) = await ApiService.Instance.LogLeadCallHistoryAsync(
+                        lead.Id,
+                        currentUser.Id,
+                        callerName,
+                        lead.CallDisposition ?? string.Empty,
+                        lead.Notes ?? string.Empty,
+                        lead.CallCount,
+                        lead.PrimaryClientName);
+
+                    if (ok && entry != null)
+                    {
+                        lead.LastCallHistoryId = entry.Id;
+                    }
+                });
+            }
+        }
+
+        // ─── Lead Profile Modal & Call History ───────────────────────────────────
+
+        private bool _isLeadProfileModalOpen;
+        private LeadModel? _profileLead;
+        private bool _isSavingProfile;
+        private bool _isLoadingProfileHistory;
+        private ObservableCollection<LeadAssignedClientInfo> _profileAssignedClients = new();
+        private ObservableCollection<LeadCallHistoryEntry> _profileCallHistory = new();
+
+        private string _origCallDate = string.Empty;
+        private string _origCallDisposition = string.Empty;
+        private string _origAssignedAgent = string.Empty;
+        private string _origNotes = string.Empty;
+        private string _origCallCount = "1";
+        private string _origBusinessName = string.Empty;
+        private string _origContactName = string.Empty;
+        private string _origTitle = string.Empty;
+        private string _origCellNumber = string.Empty;
+        private string _origEmail = string.Empty;
+        private string _origFax = string.Empty;
+        private string _origWebsite = string.Empty;
+        private string _origAddress = string.Empty;
+        private string _origCity = string.Empty;
+        private string _origCounty = string.Empty;
+        private string _origState = string.Empty;
+        private string _origZipCode = string.Empty;
+        private string _origAnnualSales = string.Empty;
+        private string _origNumberOfEmployees = string.Empty;
+        private string _origSicCode = string.Empty;
+        private string _origSicDescription = string.Empty;
+        private string _origNaicsCode = string.Empty;
+        private string _origNaicsDescription = string.Empty;
+
+        private string _profileCallDate = string.Empty;
+        private string _profileCallDisposition = string.Empty;
+        private string _profileAssignedAgent = string.Empty;
+        private string _profileNotes = string.Empty;
+        private string _profileCallCount = "1";
+        private string _profileBusinessName = string.Empty;
+        private string _profileContactName = string.Empty;
+        private string _profileTitle = string.Empty;
+        private string _profileCellNumber = string.Empty;
+        private string _profileEmail = string.Empty;
+        private string _profileFax = string.Empty;
+        private string _profileWebsite = string.Empty;
+        private string _profileAddress = string.Empty;
+        private string _profileCity = string.Empty;
+        private string _profileCounty = string.Empty;
+        private string _profileState = string.Empty;
+        private string _profileZipCode = string.Empty;
+        private string _profileAnnualSales = string.Empty;
+        private string _profileNumberOfEmployees = string.Empty;
+        private string _profileSicCode = string.Empty;
+        private string _profileSicDescription = string.Empty;
+        private string _profileNaicsCode = string.Empty;
+        private string _profileNaicsDescription = string.Empty;
+
+        public bool IsLeadProfileModalOpen { get => _isLeadProfileModalOpen; set => SetProperty(ref _isLeadProfileModalOpen, value); }
+        public LeadModel? ProfileLead { get => _profileLead; set => SetProperty(ref _profileLead, value); }
+        public bool IsSavingProfile
+        {
+            get => _isSavingProfile;
+            set { if (SetProperty(ref _isSavingProfile, value)) CommandManager.InvalidateRequerySuggested(); }
+        }
+        public bool IsLoadingProfileHistory { get => _isLoadingProfileHistory; set => SetProperty(ref _isLoadingProfileHistory, value); }
+
+        public ObservableCollection<LeadAssignedClientInfo> ProfileAssignedClients
+        {
+            get => _profileAssignedClients;
+            set { if (SetProperty(ref _profileAssignedClients, value)) OnPropertyChanged(nameof(HasProfileAssignedClients)); }
+        }
+        public bool HasProfileAssignedClients => ProfileAssignedClients.Count > 0;
+
+        public ObservableCollection<LeadCallHistoryEntry> ProfileCallHistory
+        {
+            get => _profileCallHistory;
+            set { if (SetProperty(ref _profileCallHistory, value)) OnPropertyChanged(nameof(HasProfileCallHistory)); }
+        }
+        public bool HasProfileCallHistory => ProfileCallHistory.Count > 0;
+
+        private void SetProfileField(ref string field, string value, [System.Runtime.CompilerServices.CallerMemberName] string? propName = null)
+        {
+            if (SetProperty(ref field, value ?? string.Empty, propName))
+            {
+                OnPropertyChanged(nameof(HasProfileChanges));
+                CommandManager.InvalidateRequerySuggested();
+            }
+        }
+
+        public string ProfileCallDate
+        {
+            get => _profileCallDate;
+            set
+            {
+                if (SetProperty(ref _profileCallDate, value ?? string.Empty))
+                {
+                    OnPropertyChanged(nameof(ProfileSelectedDate));
+                    OnPropertyChanged(nameof(HasProfileChanges));
+                    CommandManager.InvalidateRequerySuggested();
+                }
+            }
+        }
+
+        public DateTime? ProfileSelectedDate
+        {
+            get => LeadModel.ParseCallDate(ProfileCallDate);
+            set
+            {
+                var formatted = value?.ToString("MM/dd/yy", System.Globalization.CultureInfo.InvariantCulture) ?? string.Empty;
+                if (ProfileCallDate != formatted) ProfileCallDate = formatted;
+            }
+        }
+
+        public string ProfileCallDisposition { get => _profileCallDisposition; set => SetProfileField(ref _profileCallDisposition, value); }
+        public string ProfileAssignedAgent { get => _profileAssignedAgent; set => SetProfileField(ref _profileAssignedAgent, value); }
+        public string ProfileNotes { get => _profileNotes; set => SetProfileField(ref _profileNotes, value); }
+        public string ProfileCallCount { get => _profileCallCount; set => SetProfileField(ref _profileCallCount, value); }
+        public string ProfileBusinessName { get => _profileBusinessName; set => SetProfileField(ref _profileBusinessName, value); }
+        public string ProfileContactName { get => _profileContactName; set => SetProfileField(ref _profileContactName, value); }
+        public string ProfileTitle { get => _profileTitle; set => SetProfileField(ref _profileTitle, value); }
+        public string ProfileCellNumber { get => _profileCellNumber; set => SetProfileField(ref _profileCellNumber, value); }
+        public string ProfileEmail { get => _profileEmail; set => SetProfileField(ref _profileEmail, value); }
+        public string ProfileFax { get => _profileFax; set => SetProfileField(ref _profileFax, value); }
+        public string ProfileWebsite { get => _profileWebsite; set => SetProfileField(ref _profileWebsite, value); }
+        public string ProfileAddress { get => _profileAddress; set => SetProfileField(ref _profileAddress, value); }
+        public string ProfileCity { get => _profileCity; set => SetProfileField(ref _profileCity, value); }
+        public string ProfileCounty { get => _profileCounty; set => SetProfileField(ref _profileCounty, value); }
+        public string ProfileState { get => _profileState; set => SetProfileField(ref _profileState, value); }
+        public string ProfileZipCode { get => _profileZipCode; set => SetProfileField(ref _profileZipCode, value); }
+        public string ProfileAnnualSales { get => _profileAnnualSales; set => SetProfileField(ref _profileAnnualSales, value); }
+        public string ProfileNumberOfEmployees { get => _profileNumberOfEmployees; set => SetProfileField(ref _profileNumberOfEmployees, value); }
+        public string ProfileSicCode { get => _profileSicCode; set => SetProfileField(ref _profileSicCode, value); }
+        public string ProfileSicDescription { get => _profileSicDescription; set => SetProfileField(ref _profileSicDescription, value); }
+        public string ProfileNaicsCode { get => _profileNaicsCode; set => SetProfileField(ref _profileNaicsCode, value); }
+        public string ProfileNaicsDescription { get => _profileNaicsDescription; set => SetProfileField(ref _profileNaicsDescription, value); }
+
+        public bool HasProfileChanges =>
+            _profileCallDate != _origCallDate ||
+            _profileCallDisposition != _origCallDisposition ||
+            _profileAssignedAgent != _origAssignedAgent ||
+            _profileNotes != _origNotes ||
+            _profileCallCount != _origCallCount ||
+            _profileBusinessName != _origBusinessName ||
+            _profileContactName != _origContactName ||
+            _profileTitle != _origTitle ||
+            _profileCellNumber != _origCellNumber ||
+            _profileEmail != _origEmail ||
+            _profileFax != _origFax ||
+            _profileWebsite != _origWebsite ||
+            _profileAddress != _origAddress ||
+            _profileCity != _origCity ||
+            _profileCounty != _origCounty ||
+            _profileState != _origState ||
+            _profileZipCode != _origZipCode ||
+            _profileAnnualSales != _origAnnualSales ||
+            _profileNumberOfEmployees != _origNumberOfEmployees ||
+            _profileSicCode != _origSicCode ||
+            _profileSicDescription != _origSicDescription ||
+            _profileNaicsCode != _origNaicsCode ||
+            _profileNaicsDescription != _origNaicsDescription;
+
+        private async Task ExecuteOpenLeadProfileAsync(LeadModel? lead)
+        {
+            if (lead == null) return;
+            ProfileLead = lead;
+
+            _origCallDate = lead.CallDate ?? string.Empty;
+            _origCallDisposition = lead.CallDisposition ?? string.Empty;
+            _origAssignedAgent = lead.AssignedAgent ?? string.Empty;
+            _origNotes = lead.Notes ?? string.Empty;
+            _origCallCount = lead.CallCount.ToString();
+            _origBusinessName = lead.BusinessName ?? string.Empty;
+            _origContactName = lead.ContactName ?? string.Empty;
+            _origTitle = lead.Title ?? string.Empty;
+            _origCellNumber = lead.CellNumber ?? string.Empty;
+            _origEmail = lead.Email ?? string.Empty;
+            _origFax = lead.Fax ?? string.Empty;
+            _origWebsite = lead.Website ?? string.Empty;
+            _origAddress = lead.Address ?? string.Empty;
+            _origCity = lead.City ?? string.Empty;
+            _origCounty = lead.County ?? string.Empty;
+            _origState = lead.State ?? string.Empty;
+            _origZipCode = lead.ZipCode ?? string.Empty;
+            _origAnnualSales = lead.AnnualSales ?? string.Empty;
+            _origNumberOfEmployees = lead.NumberOfEmployees ?? string.Empty;
+            _origSicCode = lead.SicCode ?? string.Empty;
+            _origSicDescription = lead.SicDescription ?? string.Empty;
+            _origNaicsCode = lead.NaicsCode ?? string.Empty;
+            _origNaicsDescription = lead.NaicsDescription ?? string.Empty;
+
+            ProfileCallDate = _origCallDate;
+            ProfileCallDisposition = _origCallDisposition;
+            ProfileAssignedAgent = _origAssignedAgent;
+            ProfileNotes = _origNotes;
+            ProfileCallCount = _origCallCount;
+            ProfileBusinessName = _origBusinessName;
+            ProfileContactName = _origContactName;
+            ProfileTitle = _origTitle;
+            ProfileCellNumber = _origCellNumber;
+            ProfileEmail = _origEmail;
+            ProfileFax = _origFax;
+            ProfileWebsite = _origWebsite;
+            ProfileAddress = _origAddress;
+            ProfileCity = _origCity;
+            ProfileCounty = _origCounty;
+            ProfileState = _origState;
+            ProfileZipCode = _origZipCode;
+            ProfileAnnualSales = _origAnnualSales;
+            ProfileNumberOfEmployees = _origNumberOfEmployees;
+            ProfileSicCode = _origSicCode;
+            ProfileSicDescription = _origSicDescription;
+            ProfileNaicsCode = _origNaicsCode;
+            ProfileNaicsDescription = _origNaicsDescription;
+
+            OnPropertyChanged(nameof(HasProfileChanges));
+            ProfileAssignedClients = new ObservableCollection<LeadAssignedClientInfo>();
+            ProfileCallHistory = new ObservableCollection<LeadCallHistoryEntry>();
+            IsLeadProfileModalOpen = true;
+
+            IsLoadingProfileHistory = true;
+            try
+            {
+                var (ok, _, histData) = await ApiService.Instance.GetLeadHistoryAsync(lead.Id);
+                if (ok && histData != null)
+                {
+                    ProfileAssignedClients = new ObservableCollection<LeadAssignedClientInfo>(histData.AssignedClients ?? new List<LeadAssignedClientInfo>());
+                    ProfileCallHistory = new ObservableCollection<LeadCallHistoryEntry>(histData.History ?? new List<LeadCallHistoryEntry>());
+                }
+            }
+            finally
+            {
+                IsLoadingProfileHistory = false;
+            }
+        }
+
+        private async Task ExecuteUpdateLeadProfileAsync()
+        {
+            if (ProfileLead == null || !HasProfileChanges) return;
+
+            IsSavingProfile = true;
+            try
+            {
+                int parsedCallCount = int.TryParse(ProfileCallCount, out var cc) && cc >= 0 ? cc : ProfileLead.CallCount;
+                var payload = new
+                {
+                    call_date = ProfileCallDate,
+                    call_disposition = ProfileCallDisposition,
+                    assigned_agent = ProfileAssignedAgent,
+                    notes = ProfileNotes,
+                    call_count = parsedCallCount,
+                    business_name = ProfileBusinessName,
+                    contact_name = ProfileContactName,
+                    title = ProfileTitle,
+                    cell_number = ProfileCellNumber,
+                    email = ProfileEmail,
+                    fax = ProfileFax,
+                    website = ProfileWebsite,
+                    address = ProfileAddress,
+                    city = ProfileCity,
+                    county = ProfileCounty,
+                    state = ProfileState,
+                    zip_code = ProfileZipCode,
+                    annual_sales = ProfileAnnualSales,
+                    number_of_employees = ProfileNumberOfEmployees,
+                    sic_code = ProfileSicCode,
+                    sic_description = ProfileSicDescription,
+                    naics_code = ProfileNaicsCode,
+                    naics_description = ProfileNaicsDescription
+                };
+
+                var (ok, msg, _) = await ApiService.Instance.UpdateLeadAsync(ProfileLead.Id, payload);
+                if (ok)
+                {
+                    // Suppress per-field autosync callbacks while copying back to row model
+                    var prevCallback = ProfileLead.OnFieldChanged;
+                    ProfileLead.OnFieldChanged = null;
+                    try
+                    {
+                        ProfileLead.CallDate = ProfileCallDate;
+                        ProfileLead.CallDisposition = ProfileCallDisposition;
+                        ProfileLead.AssignedAgent = ProfileAssignedAgent;
+                        ProfileLead.Notes = ProfileNotes;
+                        ProfileLead.CallCount = parsedCallCount;
+                        ProfileLead.BusinessName = ProfileBusinessName;
+                        ProfileLead.ContactName = ProfileContactName;
+                        ProfileLead.Title = ProfileTitle;
+                        ProfileLead.CellNumber = ProfileCellNumber;
+                        ProfileLead.Email = ProfileEmail;
+                        ProfileLead.Fax = ProfileFax;
+                        ProfileLead.Website = ProfileWebsite;
+                        ProfileLead.Address = ProfileAddress;
+                        ProfileLead.City = ProfileCity;
+                        ProfileLead.County = ProfileCounty;
+                        ProfileLead.State = ProfileState;
+                        ProfileLead.ZipCode = ProfileZipCode;
+                        ProfileLead.AnnualSales = ProfileAnnualSales;
+                        ProfileLead.NumberOfEmployees = ProfileNumberOfEmployees;
+                        ProfileLead.SicCode = ProfileSicCode;
+                        ProfileLead.SicDescription = ProfileSicDescription;
+                        ProfileLead.NaicsCode = ProfileNaicsCode;
+                        ProfileLead.NaicsDescription = ProfileNaicsDescription;
+                    }
+                    finally
+                    {
+                        ProfileLead.OnFieldChanged = prevCallback;
+                    }
+
+                    _origCallDate = ProfileCallDate;
+                    _origCallDisposition = ProfileCallDisposition;
+                    _origAssignedAgent = ProfileAssignedAgent;
+                    _origNotes = ProfileNotes;
+                    _origCallCount = parsedCallCount.ToString();
+                    _origBusinessName = ProfileBusinessName;
+                    _origContactName = ProfileContactName;
+                    _origTitle = ProfileTitle;
+                    _origCellNumber = ProfileCellNumber;
+                    _origEmail = ProfileEmail;
+                    _origFax = ProfileFax;
+                    _origWebsite = ProfileWebsite;
+                    _origAddress = ProfileAddress;
+                    _origCity = ProfileCity;
+                    _origCounty = ProfileCounty;
+                    _origState = ProfileState;
+                    _origZipCode = ProfileZipCode;
+                    _origAnnualSales = ProfileAnnualSales;
+                    _origNumberOfEmployees = ProfileNumberOfEmployees;
+                    _origSicCode = ProfileSicCode;
+                    _origSicDescription = ProfileSicDescription;
+                    _origNaicsCode = ProfileNaicsCode;
+                    _origNaicsDescription = ProfileNaicsDescription;
+
+                    OnPropertyChanged(nameof(HasProfileChanges));
+                    ShowBanner($"Lead '{ProfileBusinessName}' updated successfully.");
+                }
+                else
+                {
+                    ShowBanner($"Update failed: {msg}", isError: true);
+                }
+            }
+            catch (Exception ex)
+            {
+                ShowBanner($"Update error: {ex.Message}", isError: true);
+            }
+            finally
+            {
+                IsSavingProfile = false;
+            }
         }
 
         // ─── Assign to Client Actions ────────────────────────────────────────────

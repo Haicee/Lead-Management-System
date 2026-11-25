@@ -169,6 +169,9 @@ namespace LeadManagement.Desktop.Models
 
         [JsonPropertyName("clients")]
         public List<string>? Clients { get; set; }
+
+        [JsonPropertyName("agents")]
+        public List<string>? Agents { get; set; }
     }
 
     public class FilterClientItem
@@ -211,6 +214,9 @@ namespace LeadManagement.Desktop.Models
 
         [JsonPropertyName("naics_descriptions")]
         public List<string> NaicsDescriptions { get; set; } = new();
+
+        [JsonPropertyName("agents")]
+        public List<string> Agents { get; set; } = new();
 
         [JsonPropertyName("clients")]
         public List<FilterClientItem> Clients { get; set; } = new();

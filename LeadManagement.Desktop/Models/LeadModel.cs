@@ -13,6 +13,7 @@ namespace LeadManagement.Desktop.Models
         private string _batchName = string.Empty;
         private int? _clientId;
         private string _clientName = string.Empty;
+        private List<string> _assignedClients = new();
         private string _callDate = string.Empty;
         private string _callDisposition = string.Empty;
         private int? _assignedAgentId;
@@ -46,6 +47,9 @@ namespace LeadManagement.Desktop.Models
         /// </summary>
         [JsonIgnore]
         public Action<LeadModel, string>? OnFieldChanged { get; set; }
+
+        [JsonIgnore]
+        public int? LastCallHistoryId { get; set; }
 
         private void NotifyChange(string fieldName)
         {
@@ -84,8 +88,61 @@ namespace LeadManagement.Desktop.Models
         public string ClientName
         {
             get => _clientName;
-            set => SetProperty(ref _clientName, value ?? string.Empty);
+            set
+            {
+                if (SetProperty(ref _clientName, value ?? string.Empty))
+                {
+                    OnPropertyChanged(nameof(PrimaryClientName));
+                    OnPropertyChanged(nameof(HasAssignedClient));
+                    OnPropertyChanged(nameof(AssignedClientsTooltip));
+                }
+            }
         }
+
+        [JsonPropertyName("assigned_clients")]
+        public List<string> AssignedClients
+        {
+            get => _assignedClients;
+            set
+            {
+                if (SetProperty(ref _assignedClients, value ?? new List<string>()))
+                {
+                    OnPropertyChanged(nameof(PrimaryClientName));
+                    OnPropertyChanged(nameof(HasAssignedClient));
+                    OnPropertyChanged(nameof(ExtraClientCount));
+                    OnPropertyChanged(nameof(HasExtraClients));
+                    OnPropertyChanged(nameof(ExtraClientsBadgeText));
+                    OnPropertyChanged(nameof(AssignedClientsTooltip));
+                }
+            }
+        }
+
+        [JsonIgnore]
+        public string PrimaryClientName =>
+            _assignedClients != null && _assignedClients.Count > 0
+                ? _assignedClients[0]
+                : _clientName;
+
+        [JsonIgnore]
+        public bool HasAssignedClient => !string.IsNullOrWhiteSpace(PrimaryClientName);
+
+        [JsonIgnore]
+        public int ExtraClientCount =>
+            _assignedClients != null && _assignedClients.Count > 1
+                ? _assignedClients.Count - 1
+                : 0;
+
+        [JsonIgnore]
+        public bool HasExtraClients => ExtraClientCount > 0;
+
+        [JsonIgnore]
+        public string ExtraClientsBadgeText => $"+{ExtraClientCount}";
+
+        [JsonIgnore]
+        public string AssignedClientsTooltip =>
+            _assignedClients != null && _assignedClients.Count > 0
+                ? string.Join(", ", _assignedClients)
+                : (HasAssignedClient ? PrimaryClientName : "Unassigned");
 
         [JsonPropertyName("call_date")]
         public string CallDate

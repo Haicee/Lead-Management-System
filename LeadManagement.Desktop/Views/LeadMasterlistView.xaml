@@ -185,12 +185,12 @@
                             <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
 
-                        <!-- Client (multi-select) -->
+                        <!-- Assigned Client (multi-select) -->
                         <controls:MultiSelectDropdown Grid.Column="0"
                                   ItemsSource="{Binding ClientItems}"
-                                  HeaderText="Clients"
+                                  HeaderText="Assigned Clients"
                                   Margin="0,0,8,0"
-                                  ToolTip="Filter by Client or Unassigned" />
+                                  ToolTip="Filter by Assigned Client or Unassigned" />
 
                         <!-- City (multi-select) -->
                         <controls:MultiSelectDropdown Grid.Column="1"
@@ -220,38 +220,46 @@
                                   ToolTip="Filter by Annual Sales Range — select multiple sales ranges" />
                     </Grid>
 
-                    <!-- Row 3: SIC & NAICS Filters (4 Columns) — Multi-Select Checkboxes -->
+                    <!-- Row 3: Agent, SIC & NAICS Filters (5 Columns) — Multi-Select Checkboxes -->
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
 
-                        <!-- SIC Code (multi-select) -->
+                        <!-- Agent (multi-select) -->
                         <controls:MultiSelectDropdown Grid.Column="0"
+                                  ItemsSource="{Binding AgentFilterItems}"
+                                  HeaderText="Agents"
+                                  Margin="0,0,8,0"
+                                  ToolTip="Filter by Assigned Agent or Unassigned" />
+
+                        <!-- SIC Code (multi-select) -->
+                        <controls:MultiSelectDropdown Grid.Column="1"
                                   ItemsSource="{Binding SicCodeItems}"
                                   HeaderText="SIC Codes"
                                   Margin="0,0,8,0"
                                   ToolTip="Filter by SIC Code — select multiple SIC codes" />
 
                         <!-- SIC Description (multi-select) -->
-                        <controls:MultiSelectDropdown Grid.Column="1"
+                        <controls:MultiSelectDropdown Grid.Column="2"
                                   ItemsSource="{Binding SicDescItems}"
                                   HeaderText="SIC Descriptions"
                                   Margin="0,0,8,0"
                                   ToolTip="Filter by SIC Description — select multiple SIC descriptions" />
 
                         <!-- NAICS Code (multi-select) -->
-                        <controls:MultiSelectDropdown Grid.Column="2"
+                        <controls:MultiSelectDropdown Grid.Column="3"
                                   ItemsSource="{Binding NaicsCodeItems}"
                                   HeaderText="NAICS Codes"
                                   Margin="0,0,8,0"
                                   ToolTip="Filter by NAICS Code — select multiple NAICS codes" />
 
                         <!-- NAICS Description (multi-select) -->
-                        <controls:MultiSelectDropdown Grid.Column="3"
+                        <controls:MultiSelectDropdown Grid.Column="4"
                                   ItemsSource="{Binding NaicsDescItems}"
                                   HeaderText="NAICS Descriptions"
                                   ToolTip="Filter by NAICS Description — select multiple NAICS descriptions" />
@@ -278,111 +286,156 @@
                           ClipboardCopyMode="ExcludeHeader"
                           VerticalScrollBarVisibility="Auto"
                           HorizontalScrollBarVisibility="Auto"
-                          Sorting="OnDataGridSorting" SelectionChanged="DataGrid_SelectionChanged">
+                          SelectionChanged="DataGrid_SelectionChanged">
                 <DataGrid.Columns>
 
-                    <!-- 1. DATE with Calendar Picker (Editable) -->
-                    <DataGridTemplateColumn Header="DATE" Width="135" CanUserSort="True" SortMemberPath="SelectedDate">
+                    <!-- 0. PROFILE Button (Very Left First Column) -->
+                    <DataGridTemplateColumn Header="PROFILE" Width="73" CanUserSort="False">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
-                                <DatePicker SelectedDate="{Binding SelectedDate, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                            Height="28" VerticalAlignment="Center" VerticalContentAlignment="Center"
-                                            BorderBrush="#CBD5E1" Background="White" Padding="4,1"
-                                            ToolTip="Pick a date for this call"/>
+                                <Button Command="{Binding DataContext.OpenLeadProfileCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                        CommandParameter="{Binding}"
+                                        Style="{StaticResource SecondaryButtonStyle}"
+                                        Height="28" Width="36" Padding="0"
+                                        HorizontalAlignment="Center" VerticalAlignment="Center"
+                                        ToolTip="Open lead profile, edit all fields &amp; view call history">
+                                    <TextBlock Text="👤" FontSize="13" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                                </Button>
                             </DataTemplate>
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
 
-                    <!-- 2. CALL DISPOSITION Dropdown with Color Coding (Editable) -->
-                    <DataGridTemplateColumn Header="CALL DISPOSITION" Width="185" CanUserSort="True" SortMemberPath="CallDisposition">
+                    <!-- 1. DATE (Read-only display; edit via Profile modal) -->
+                    <DataGridTemplateColumn Header="DATE" Width="115" CanUserSort="True" SortMemberPath="CallDate">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
-                                <ComboBox ItemsSource="{Binding Source={x:Static models:CallDispositionHelper.Dispositions}}"
-                                          SelectedValue="{Binding CallDisposition, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                          SelectedValuePath="Name"
-                                          Height="30" VerticalAlignment="Center"
-                                          BorderBrush="#CBD5E1" Background="White">
-                                    <ComboBox.ItemTemplate>
-                                        <DataTemplate>
-                                            <Border Background="{Binding BackgroundHex}"
-                                                    BorderBrush="{Binding BorderHex}"
-                                                    BorderThickness="1" CornerRadius="8"
-                                                    Padding="8,3" Margin="0,1" HorizontalAlignment="Stretch">
-                                                <TextBlock Text="{Binding Name}"
-                                                           Foreground="{Binding ForegroundHex}"
-                                                           FontWeight="SemiBold" FontSize="11.5"/>
-                                            </Border>
-                                        </DataTemplate>
-                                    </ComboBox.ItemTemplate>
-                                </ComboBox>
+                                <TextBlock FontSize="12" VerticalAlignment="Center">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Text" Value="{Binding CallDate}"/>
+                                            <Setter Property="Foreground" Value="#0F172A"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding CallDate}" Value="">
+                                                    <Setter Property="Text" Value="—"/>
+                                                    <Setter Property="Foreground" Value="#94A3B8"/>
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding CallDate}" Value="{x:Null}">
+                                                    <Setter Property="Text" Value="—"/>
+                                                    <Setter Property="Foreground" Value="#94A3B8"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
                             </DataTemplate>
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
 
-                    <!-- 3. AGENT Assigned Dropdown (Editable) -->
-                    <DataGridTemplateColumn Header="AGENT" Width="150" CanUserSort="True" SortMemberPath="AssignedAgent">
+                    <!-- 2. CALL DISPOSITION (Read-only color-coded badge; edit via Profile modal) -->
+                    <DataGridTemplateColumn Header="CALL DISPOSITION" Width="165" CanUserSort="True" SortMemberPath="CallDisposition">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
-                                <ComboBox ItemsSource="{Binding AvailableAgentOptions}"
-                                          SelectedItem="{Binding AssignedAgent, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                          Height="30" VerticalAlignment="Center"
-                                          BorderBrush="#CBD5E1" Background="White">
-                                    <ComboBox.ItemTemplate>
-                                        <DataTemplate>
-                                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                                <TextBlock FontSize="11" Margin="0,0,5,0" VerticalAlignment="Center">
-                                                    <TextBlock.Style>
-                                                        <Style TargetType="TextBlock">
-                                                            <Setter Property="Text" Value="👤"/>
-                                                            <Setter Property="Foreground" Value="#64748B"/>
-                                                            <Style.Triggers>
-                                                                <DataTrigger Binding="{Binding}" Value="">
-                                                                    <Setter Property="Text" Value="—"/>
-                                                                    <Setter Property="Foreground" Value="#94A3B8"/>
-                                                                </DataTrigger>
-                                                            </Style.Triggers>
-                                                        </Style>
-                                                    </TextBlock.Style>
-                                                </TextBlock>
-                                                <TextBlock FontSize="12" VerticalAlignment="Center">
-                                                    <TextBlock.Style>
-                                                        <Style TargetType="TextBlock">
-                                                            <Setter Property="Text" Value="{Binding}"/>
-                                                            <Setter Property="Foreground" Value="#0F172A"/>
-                                                            <Setter Property="FontWeight" Value="Medium"/>
-                                                            <Style.Triggers>
-                                                                <DataTrigger Binding="{Binding}" Value="">
-                                                                    <Setter Property="Text" Value="Unassigned"/>
-                                                                    <Setter Property="Foreground" Value="#94A3B8"/>
-                                                                    <Setter Property="FontStyle" Value="Italic"/>
-                                                                    <Setter Property="FontWeight" Value="Normal"/>
-                                                                </DataTrigger>
-                                                            </Style.Triggers>
-                                                        </Style>
-                                                    </TextBlock.Style>
-                                                </TextBlock>
-                                            </StackPanel>
-                                        </DataTemplate>
-                                    </ComboBox.ItemTemplate>
-                                </ComboBox>
+                                <Grid VerticalAlignment="Center">
+                                    <Border Background="{Binding DispositionInfo.BackgroundHex}"
+                                            BorderBrush="{Binding DispositionInfo.BorderHex}"
+                                            BorderThickness="1" CornerRadius="8"
+                                            Padding="8,3" HorizontalAlignment="Left">
+                                        <Border.Style>
+                                            <Style TargetType="Border">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding CallDisposition}" Value="">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding CallDisposition}" Value="{x:Null}">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Border.Style>
+                                        <TextBlock Text="{Binding CallDisposition}"
+                                                   Foreground="{Binding DispositionInfo.ForegroundHex}"
+                                                   FontWeight="SemiBold" FontSize="11.5"/>
+                                    </Border>
+                                    <TextBlock Text="—" FontSize="12" Foreground="#94A3B8" VerticalAlignment="Center">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding CallDisposition}" Value="">
+                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding CallDisposition}" Value="{x:Null}">
+                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                </Grid>
                             </DataTemplate>
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
 
-                    <!-- 4. NOTES (Editable) -->
-                    <DataGridTemplateColumn Header="NOTES" Width="200" CanUserSort="True" SortMemberPath="Notes">
+                    <!-- 3. AGENT (Read-only display; edit via Profile modal) -->
+                    <DataGridTemplateColumn Header="AGENT" Width="140" CanUserSort="True" SortMemberPath="AssignedAgent">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
-                                <TextBox Text="{Binding Notes, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
-                                         Height="28" VerticalContentAlignment="Center"
-                                         Padding="6,2" BorderBrush="#CBD5E1" BorderThickness="1"
-                                         Background="White" FontSize="12"
-                                         ToolTip="{Binding Notes}"/>
+                                <TextBlock FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Text" Value="{Binding AssignedAgent, StringFormat='👤 {0}'}"/>
+                                            <Setter Property="Foreground" Value="#0F172A"/>
+                                            <Setter Property="FontWeight" Value="Medium"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding AssignedAgent}" Value="">
+                                                    <Setter Property="Text" Value="— Unassigned —"/>
+                                                    <Setter Property="Foreground" Value="#94A3B8"/>
+                                                    <Setter Property="FontStyle" Value="Italic"/>
+                                                    <Setter Property="FontWeight" Value="Normal"/>
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding AssignedAgent}" Value="{x:Null}">
+                                                    <Setter Property="Text" Value="— Unassigned —"/>
+                                                    <Setter Property="Foreground" Value="#94A3B8"/>
+                                                    <Setter Property="FontStyle" Value="Italic"/>
+                                                    <Setter Property="FontWeight" Value="Normal"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
                             </DataTemplate>
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
 
-                    <!-- 5. # OF CALL (Auto-incremented on Dial / Editable) -->
+                    <!-- 4. NOTES (Read-only display; edit via Profile modal) -->
+                    <DataGridTemplateColumn Header="NOTES" Width="190" CanUserSort="True" SortMemberPath="Notes">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <TextBlock FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                                           ToolTip="{Binding Notes}">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Text" Value="{Binding Notes}"/>
+                                            <Setter Property="Foreground" Value="#334155"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Notes}" Value="">
+                                                    <Setter Property="Text" Value="—"/>
+                                                    <Setter Property="Foreground" Value="#94A3B8"/>
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding Notes}" Value="{x:Null}">
+                                                    <Setter Property="Text" Value="—"/>
+                                                    <Setter Property="Foreground" Value="#94A3B8"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+
+                    <!-- 5. # OF CALL (Auto-incremented on Dial) -->
                     <DataGridTemplateColumn Header="# OF CALL" Width="95" CanUserSort="True" SortMemberPath="CallCount">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
@@ -397,8 +450,8 @@
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
 
-                    <!-- 6. CELL NUMBER (with Zoom Phone Call Button) -->
-                    <DataGridTemplateColumn Header="CELL NUMBER" Width="180" CanUserSort="True" SortMemberPath="CellNumber">
+                    <!-- 6. CELL NUMBER (Read-only display with Zoom Phone Call Button) -->
+                    <DataGridTemplateColumn Header="CELL NUMBER" Width="160" CanUserSort="True" SortMemberPath="CellNumber">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
                                 <Grid VerticalAlignment="Center">
@@ -412,50 +465,54 @@
                                             Command="{Binding DataContext.CallLeadCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                             CommandParameter="{Binding}"
                                             Style="{StaticResource CallIconButtonStyle}"
-                                            Margin="0,0,5,0"
+                                            Margin="0,0,8,0"
                                             ToolTip="Call this number via Zoom Phone (auto-increments # OF CALL)">
                                         <Path Data="M3.654 1.328a.678.678 0 0 0-1.015-.063L1.605 2.3c-.483.484-.661 1.169-.45 1.77a17.6 17.6 0 0 0 4.168 6.608 17.6 17.6 0 0 0 6.608 4.168c.601.211 1.286.033 1.77-.45l1.034-1.034a.678.678 0 0 0-.063-1.015l-2.307-1.794a.68.68 0 0 0-.58-.122l-2.19.547a1.75 1.75 0 0 1-1.657-.459L5.482 8.062a1.75 1.75 0 0 1-.46-1.657l.548-2.19a.68.68 0 0 0-.122-.58z"
                                               Fill="White" Stretch="Uniform" Width="12" Height="12"/>
                                     </Button>
 
-                                    <!-- Cell Number TextBox (Editable) -->
+                                    <!-- Cell Number (Read-only selectable text) -->
                                     <TextBox Grid.Column="1"
-                                             Text="{Binding CellNumber, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
-                                             Height="28" VerticalContentAlignment="Center"
-                                             Padding="6,2" BorderBrush="#CBD5E1" BorderThickness="1"
-                                             Background="White" FontSize="12"
+                                             Text="{Binding CellNumber, Mode=OneWay}"
+                                             Style="{StaticResource SelectableTextStyle}"
+                                             FontSize="12"
+                                             VerticalAlignment="Center"
                                              ToolTip="{Binding CellNumber}"/>
                                 </Grid>
                             </DataTemplate>
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
 
-                    <!-- 7. ASSIGNED CLIENT Column -->
-                    <DataGridTemplateColumn Header="ASSIGNED CLIENT" Width="150" CanUserSort="True" SortMemberPath="ClientName">
+                    <!-- 7. ASSIGNED CLIENT Column (Supports multiple clients with +1 / +N badge) -->
+                    <DataGridTemplateColumn Header="ASSIGNED CLIENT" Width="175" CanUserSort="True" SortMemberPath="ClientName">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
-                                <Border CornerRadius="6" Padding="8,3" Background="#F1F5F9" BorderBrush="#E2E8F0" BorderThickness="1" HorizontalAlignment="Left" VerticalAlignment="Center">
-                                    <TextBlock FontSize="11.5" FontWeight="SemiBold">
-                                        <TextBlock.Style>
-                                            <Style TargetType="TextBlock">
-                                                <Setter Property="Text" Value="{Binding ClientName}"/>
-                                                <Setter Property="Foreground" Value="#0F172A"/>
-                                                <Style.Triggers>
-                                                    <DataTrigger Binding="{Binding ClientName}" Value="">
-                                                        <Setter Property="Text" Value="— Unassigned —"/>
-                                                        <Setter Property="Foreground" Value="#94A3B8"/>
-                                                        <Setter Property="FontStyle" Value="Italic"/>
-                                                    </DataTrigger>
-                                                    <DataTrigger Binding="{Binding ClientName}" Value="{x:Null}">
-                                                        <Setter Property="Text" Value="— Unassigned —"/>
-                                                        <Setter Property="Foreground" Value="#94A3B8"/>
-                                                        <Setter Property="FontStyle" Value="Italic"/>
-                                                    </DataTrigger>
-                                                </Style.Triggers>
-                                            </Style>
-                                        </TextBlock.Style>
-                                    </TextBlock>
-                                </Border>
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" ToolTip="{Binding AssignedClientsTooltip}">
+                                    <Border CornerRadius="6" Padding="8,3" Background="#F1F5F9" BorderBrush="#E2E8F0" BorderThickness="1" VerticalAlignment="Center">
+                                        <TextBlock FontSize="11.5" FontWeight="SemiBold" MaxWidth="115" TextTrimming="CharacterEllipsis">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Text" Value="{Binding PrimaryClientName}"/>
+                                                    <Setter Property="Foreground" Value="#0F172A"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding HasAssignedClient}" Value="False">
+                                                            <Setter Property="Text" Value="— Unassigned —"/>
+                                                            <Setter Property="Foreground" Value="#94A3B8"/>
+                                                            <Setter Property="FontStyle" Value="Italic"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </Border>
+                                    <Border CornerRadius="10" Padding="6,2" Margin="4,0,0,0"
+                                            Background="#EEF2FF" BorderBrush="#C7D2FE" BorderThickness="1"
+                                            VerticalAlignment="Center"
+                                            Visibility="{Binding HasExtraClients, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                        <TextBlock Text="{Binding ExtraClientsBadgeText}"
+                                                   FontSize="10.5" FontWeight="Bold" Foreground="#4338CA"/>
+                                    </Border>
+                                </StackPanel>
                             </DataTemplate>
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
@@ -809,6 +866,378 @@
             </StackPanel>
         </Grid>
     </Border>
+
+        <!-- ======================================================== -->
+        <!-- MODAL OVERLAY: Lead Profile & Call/Client History        -->
+        <!-- ======================================================== -->
+        <Grid Grid.Row="0"
+              Grid.Column="0"
+              Grid.RowSpan="3"
+              Grid.ColumnSpan="3"
+              Background="#990F172A"
+              Margin="-24,-20,-24,-20"
+              HorizontalAlignment="Stretch"
+              VerticalAlignment="Stretch"
+              Visibility="{Binding IsLeadProfileModalOpen, Converter={StaticResource BooleanToVisibilityConverter}}"
+              Panel.ZIndex="9997">
+            <Border Background="White"
+                    CornerRadius="14"
+                    Width="920"
+                    MaxHeight="780"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    BorderBrush="{StaticResource BorderBrush}"
+                    BorderThickness="1">
+                <Border.Effect>
+                    <DropShadowEffect BlurRadius="36" ShadowDepth="6" Opacity="0.25" Color="#000000" />
+                </Border.Effect>
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <!-- Modal Header -->
+                    <Border Grid.Row="0" Background="#F8FAFC" BorderBrush="#E2E8F0" BorderThickness="0,0,0,1" CornerRadius="14,14,0,0" Padding="24,16">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <TextBlock Text="👤 " FontSize="18" VerticalAlignment="Center" />
+                                    <TextBlock Text="{Binding ProfileBusinessName}" FontSize="18" FontWeight="Bold" Foreground="{StaticResource TextPrimaryBrush}" VerticalAlignment="Center" />
+                                </StackPanel>
+                                <TextBlock Text="Edit any lead details below or review call &amp; multi-client assignment history."
+                                           FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,3,0,0" />
+                            </StackPanel>
+                            <Button Grid.Column="1" Command="{Binding CloseLeadProfileCommand}"
+                                    Background="Transparent" BorderThickness="0" Cursor="Hand" Padding="6" VerticalAlignment="Top">
+                                <TextBlock Text="✕" FontSize="15" Foreground="#64748B" />
+                            </Button>
+                        </Grid>
+                    </Border>
+
+                    <!-- Scrollable Body: Editable Fields + History List -->
+                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Padding="24,18">
+                        <StackPanel>
+                            <!-- Assigned Clients Chips -->
+                            <Border Background="#F8FAFC" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="8" Padding="14,10" Margin="0,0,0,16">
+                                <StackPanel>
+                                    <TextBlock Text="ASSIGNED CLIENTS" FontSize="10.5" FontWeight="Bold" Foreground="#64748B" Margin="0,0,0,6" />
+                                    <ItemsControl ItemsSource="{Binding ProfileAssignedClients}"
+                                                  Visibility="{Binding HasProfileAssignedClients, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <WrapPanel Orientation="Horizontal" />
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Border Background="#EEF2FF" BorderBrush="#C7D2FE" BorderThickness="1" CornerRadius="6" Padding="8,4" Margin="0,0,6,4">
+                                                    <TextBlock Text="{Binding DisplayLabel}" FontSize="11.5" FontWeight="SemiBold" Foreground="#3730A3" />
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                    <TextBlock Text="Not assigned to any client yet." FontSize="12" Foreground="#94A3B8" FontStyle="Italic">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Visibility" Value="Collapsed" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding HasProfileAssignedClients}" Value="False">
+                                                        <Setter Property="Visibility" Value="Visible" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Editable Lead Details Grid (3 Columns) -->
+                            <TextBlock Text="LEAD DETAILS (EDITABLE)" FontSize="11" FontWeight="Bold" Foreground="#64748B" Margin="0,0,0,10" />
+                            <Grid Margin="0,0,0,12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="12" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="12" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+
+                                <!-- Row 0: Business Name, Contact Name, Title -->
+                                <StackPanel Grid.Row="0" Grid.Column="0" Margin="0,0,0,10">
+                                    <TextBlock Text="Business Name" FontSize="11" FontWeight="SemiBold" Foreground="#475569" Margin="0,0,0,4" />
+                                    <TextBox Text="{Binding ProfileBusinessName, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource ModernTextBoxStyle}" Height="36" Padding="10,6" FontSize="13" />
+                                </StackPanel>
+                                <StackPanel Grid.Row="0" Grid.Column="2" Margin="0,0,0,10">
+                                    <TextBlock Text="Contact Name" FontSize="11" FontWeight="SemiBold" Foreground="#475569" Margin="0,0,0,4" />
+                                    <TextBox Text="{Binding ProfileContactName, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource ModernTextBoxStyle}" Height="36" Padding="10,6" FontSize="13" />
+                                </StackPanel>
+                                <StackPanel Grid.Row="0" Grid.Column="4" Margin="0,0,0,10">
+                                    <TextBlock Text="Title" FontSize="11" FontWeight="SemiBold" Foreground="#475569" Margin="0,0,0,4" />
+                                    <TextBox Text="{Binding ProfileTitle, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource ModernTextBoxStyle}" Height="36" Padding="10,6" FontSize="13" />
+                                </StackPanel>
+
+                                <!-- Row 1: Cell Number, Email, Fax -->
+                                <StackPanel Grid.Row="1" Grid.Column="0" Margin="0,0,0,10">
+                                    <TextBlock Text="Cell Number" FontSize="11" FontWeight="SemiBold" Foreground="#475569" Margin="0,0,0,4" />
+                                    <TextBox Text="{Binding ProfileCellNumber, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource ModernTextBoxStyle}" Height="36" Padding="10,6" FontSize="13" />
+                                </StackPanel>
+                                <StackPanel Grid.Row="1" Grid.Column="2" Margin="0,0,0,10">
+                                    <TextBlock Text="Email" FontSize="11" FontWeight="SemiBold" Foreground="#475569" Margin="0,0,0,4" />
+                                    <TextBox Text="{Binding ProfileEmail, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource ModernTextBoxStyle}" Height="36" Padding="10,6" FontSize="13" />
+                                </StackPanel>
+                                <StackPanel Grid.Row="1" Grid.Column="4" Margin="0,0,0,10">
+                                    <TextBlock Text="Fax" FontSize="11" FontWeight="SemiBold" Foreground="#475569" Margin="0,0,0,4" />
+                                    <TextBox Text="{Binding ProfileFax, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource ModernTextBoxStyle}" Height="36" Padding="10,6" FontSize="13" />
+                                </StackPanel>
+
+                                <!-- Row 2: Website, Call Date, Call Count -->
+                                <StackPanel Grid.Row="2" Grid.Column="0" Margin="0,0,0,10">
+                                    <TextBlock Text="Website" FontSize="11" FontWeight="SemiBold" Foreground="#475569" Margin="0,0,0,4" />
+                                    <TextBox Text="{Binding ProfileWebsite, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource ModernTextBoxStyle}" Height="36" Padding="10,6" FontSize="13" />
+                                </StackPanel>
+                                <StackPanel Grid.Row="2" Grid.Column="2" Margin="0,0,0,10">
+                                    <TextBlock Text="Call Date" FontSize="11" FontWeight="SemiBold" Foreground="#475569" Margin="0,0,0,4" />
+                                    <DatePicker SelectedDate="{Binding ProfileSelectedDate, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Height="36" VerticalContentAlignment="Center" BorderBrush="#CBD5E1" Background="White" />
+                                </StackPanel>
+                                <StackPanel Grid.Row="2" Grid.Column="4" Margin="0,0,0,10">
+                                    <TextBlock Text="# of Calls" FontSize="11" FontWeight="SemiBold" Foreground="#475569" Margin="0,0,0,4" />
+                                    <TextBox Text="{Binding ProfileCallCount, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource ModernTextBoxStyle}" Height="36" Padding="10,6" FontSize="13" />
+                                </StackPanel>
+
+                                <!-- Row 3: Call Disposition, Assigned Agent, Annual Sales -->
+                                <StackPanel Grid.Row="3" Grid.Column="0" Margin="0,0,0,10">
+                                    <TextBlock Text="Call Disposition" FontSize="11" FontWeight="SemiBold" Foreground="#475569" Margin="0,0,0,4" />
+                                    <ComboBox ItemsSource="{Binding Source={x:Static models:CallDispositionHelper.Dispositions}}"
+                                              SelectedValue="{Binding ProfileCallDisposition, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                              SelectedValuePath="Name" DisplayMemberPath="Name"
+                                              Height="36" BorderBrush="#CBD5E1" Background="White" />
+                                </StackPanel>
+                                <StackPanel Grid.Row="3" Grid.Column="2" Margin="0,0,0,10">
+                                    <TextBlock Text="Assigned Agent" FontSize="11" FontWeight="SemiBold" Foreground="#475569" Margin="0,0,0,4" />
+                                    <ComboBox ItemsSource="{Binding AllAgentOptions}"
+                                              SelectedItem="{Binding ProfileAssignedAgent, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                              Height="36" BorderBrush="#CBD5E1" Background="White" />
+                                </StackPanel>
+                                <StackPanel Grid.Row="3" Grid.Column="4" Margin="0,0,0,10">
+                                    <TextBlock Text="Annual Sales" FontSize="11" FontWeight="SemiBold" Foreground="#475569" Margin="0,0,0,4" />
+                                    <TextBox Text="{Binding ProfileAnnualSales, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource ModernTextBoxStyle}" Height="36" Padding="10,6" FontSize="13" />
+                                </StackPanel>
+
+                                <!-- Row 4: Address, City, County -->
+                                <StackPanel Grid.Row="4" Grid.Column="0" Margin="0,0,0,10">
+                                    <TextBlock Text="Address" FontSize="11" FontWeight="SemiBold" Foreground="#475569" Margin="0,0,0,4" />
+                                    <TextBox Text="{Binding ProfileAddress, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource ModernTextBoxStyle}" Height="36" Padding="10,6" FontSize="13" />
+                                </StackPanel>
+                                <StackPanel Grid.Row="4" Grid.Column="2" Margin="0,0,0,10">
+                                    <TextBlock Text="City" FontSize="11" FontWeight="SemiBold" Foreground="#475569" Margin="0,0,0,4" />
+                                    <TextBox Text="{Binding ProfileCity, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource ModernTextBoxStyle}" Height="36" Padding="10,6" FontSize="13" />
+                                </StackPanel>
+                                <StackPanel Grid.Row="4" Grid.Column="4" Margin="0,0,0,10">
+                                    <TextBlock Text="County" FontSize="11" FontWeight="SemiBold" Foreground="#475569" Margin="0,0,0,4" />
+                                    <TextBox Text="{Binding ProfileCounty, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource ModernTextBoxStyle}" Height="36" Padding="10,6" FontSize="13" />
+                                </StackPanel>
+
+                                <!-- Row 5: State, Zip Code, Number of Employees -->
+                                <StackPanel Grid.Row="5" Grid.Column="0" Margin="0,0,0,10">
+                                    <TextBlock Text="State" FontSize="11" FontWeight="SemiBold" Foreground="#475569" Margin="0,0,0,4" />
+                                    <TextBox Text="{Binding ProfileState, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource ModernTextBoxStyle}" Height="36" Padding="10,6" FontSize="13" />
+                                </StackPanel>
+                                <StackPanel Grid.Row="5" Grid.Column="2" Margin="0,0,0,10">
+                                    <TextBlock Text="Zip Code" FontSize="11" FontWeight="SemiBold" Foreground="#475569" Margin="0,0,0,4" />
+                                    <TextBox Text="{Binding ProfileZipCode, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource ModernTextBoxStyle}" Height="36" Padding="10,6" FontSize="13" />
+                                </StackPanel>
+                                <StackPanel Grid.Row="5" Grid.Column="4" Margin="0,0,0,10">
+                                    <TextBlock Text="Number of Employees" FontSize="11" FontWeight="SemiBold" Foreground="#475569" Margin="0,0,0,4" />
+                                    <TextBox Text="{Binding ProfileNumberOfEmployees, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource ModernTextBoxStyle}" Height="36" Padding="10,6" FontSize="13" />
+                                </StackPanel>
+
+                                <!-- Row 6: SIC Code, SIC Description, NAICS Code -->
+                                <StackPanel Grid.Row="6" Grid.Column="0" Margin="0,0,0,10">
+                                    <TextBlock Text="SIC Code" FontSize="11" FontWeight="SemiBold" Foreground="#475569" Margin="0,0,0,4" />
+                                    <TextBox Text="{Binding ProfileSicCode, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource ModernTextBoxStyle}" Height="36" Padding="10,6" FontSize="13" />
+                                </StackPanel>
+                                <StackPanel Grid.Row="6" Grid.Column="2" Margin="0,0,0,10">
+                                    <TextBlock Text="SIC Description" FontSize="11" FontWeight="SemiBold" Foreground="#475569" Margin="0,0,0,4" />
+                                    <TextBox Text="{Binding ProfileSicDescription, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource ModernTextBoxStyle}" Height="36" Padding="10,6" FontSize="13" />
+                                </StackPanel>
+                                <StackPanel Grid.Row="6" Grid.Column="4" Margin="0,0,0,10">
+                                    <TextBlock Text="NAICS Code" FontSize="11" FontWeight="SemiBold" Foreground="#475569" Margin="0,0,0,4" />
+                                    <TextBox Text="{Binding ProfileNaicsCode, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource ModernTextBoxStyle}" Height="36" Padding="10,6" FontSize="13" />
+                                </StackPanel>
+
+                                <!-- Row 7: NAICS Description & Notes -->
+                                <StackPanel Grid.Row="7" Grid.Column="0" Margin="0,0,0,10">
+                                    <TextBlock Text="NAICS Description" FontSize="11" FontWeight="SemiBold" Foreground="#475569" Margin="0,0,0,4" />
+                                    <TextBox Text="{Binding ProfileNaicsDescription, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource ModernTextBoxStyle}" Height="36" Padding="10,6" FontSize="13" />
+                                </StackPanel>
+                                <StackPanel Grid.Row="7" Grid.Column="2" Grid.ColumnSpan="3" Margin="0,0,0,10">
+                                    <TextBlock Text="Notes" FontSize="11" FontWeight="SemiBold" Foreground="#475569" Margin="0,0,0,4" />
+                                    <TextBox Text="{Binding ProfileNotes, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource ModernTextBoxStyle}" Height="36" Padding="10,6" FontSize="13" />
+                                </StackPanel>
+                            </Grid>
+
+                            <!-- Call & Assignment History List -->
+                            <Rectangle Height="1" Fill="#E2E8F0" Margin="0,4,0,14" />
+                            <TextBlock Text="CALL &amp; ASSIGNMENT HISTORY" FontSize="11" FontWeight="Bold" Foreground="#64748B" Margin="0,0,0,10" />
+
+                            <TextBlock Text="Loading history…" FontSize="12" Foreground="#64748B"
+                                       Visibility="{Binding IsLoadingProfileHistory, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                       Margin="0,0,0,8" />
+
+                            <Border BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="8" ClipToBounds="True"
+                                    Visibility="{Binding HasProfileCallHistory, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                <StackPanel>
+                                    <!-- Table Header -->
+                                    <Border Background="#0F172A" Padding="12,8">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="135" /> <!-- Agent -->
+                                                <ColumnDefinition Width="145" /> <!-- Client -->
+                                                <ColumnDefinition Width="135" /> <!-- Date -->
+                                                <ColumnDefinition Width="75" />  <!-- # of Call -->
+                                                <ColumnDefinition Width="135" /> <!-- Disposition -->
+                                                <ColumnDefinition Width="*" />   <!-- Notes -->
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="AGENT" FontSize="10.5" FontWeight="Bold" Foreground="White" />
+                                            <TextBlock Grid.Column="1" Text="CLIENT" FontSize="10.5" FontWeight="Bold" Foreground="White" />
+                                            <TextBlock Grid.Column="2" Text="DATE" FontSize="10.5" FontWeight="Bold" Foreground="White" />
+                                            <TextBlock Grid.Column="3" Text="# OF CALL" FontSize="10.5" FontWeight="Bold" Foreground="White" HorizontalAlignment="Center" />
+                                            <TextBlock Grid.Column="4" Text="DISPOSITION" FontSize="10.5" FontWeight="Bold" Foreground="White" Margin="6,0,0,0" />
+                                            <TextBlock Grid.Column="5" Text="NOTES" FontSize="10.5" FontWeight="Bold" Foreground="White" Margin="6,0,0,0" />
+                                        </Grid>
+                                    </Border>
+
+                                    <!-- Single-Line History Rows -->
+                                    <ItemsControl ItemsSource="{Binding ProfileCallHistory}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Border Background="White" BorderBrush="#E2E8F0" BorderThickness="0,0,0,1" Padding="12,9">
+                                                    <Grid VerticalAlignment="Center">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="135" /> <!-- Agent -->
+                                                            <ColumnDefinition Width="145" /> <!-- Client -->
+                                                            <ColumnDefinition Width="135" /> <!-- Date -->
+                                                            <ColumnDefinition Width="75" />  <!-- # of Call -->
+                                                            <ColumnDefinition Width="135" /> <!-- Disposition -->
+                                                            <ColumnDefinition Width="*" />   <!-- Notes -->
+                                                        </Grid.ColumnDefinitions>
+
+                                                        <!-- 1. Agent -->
+                                                        <TextBlock Grid.Column="0" FontSize="12" FontWeight="SemiBold" Foreground="#065F46"
+                                                                   TextTrimming="CharacterEllipsis" VerticalAlignment="Center" Margin="0,0,8,0"
+                                                                   ToolTip="{Binding AgentName}">
+                                                            <Run Text="👤 " />
+                                                            <Run Text="{Binding AgentName, Mode=OneWay}" />
+                                                        </TextBlock>
+
+                                                        <!-- 2. Client -->
+                                                        <TextBlock Grid.Column="1" FontSize="12" FontWeight="Medium" Foreground="#3730A3"
+                                                                   TextTrimming="CharacterEllipsis" VerticalAlignment="Center" Margin="0,0,8,0"
+                                                                   ToolTip="{Binding ClientNames}">
+                                                            <Run Text="🏢 " />
+                                                            <Run Text="{Binding ClientNames, Mode=OneWay}" />
+                                                        </TextBlock>
+
+                                                        <!-- 3. Date -->
+                                                        <TextBlock Grid.Column="2" Text="{Binding FormattedCalledAt}" FontSize="11.5" Foreground="#64748B"
+                                                                   TextTrimming="CharacterEllipsis" VerticalAlignment="Center" Margin="0,0,8,0" />
+
+                                                        <!-- 4. # of Call -->
+                                                        <Border Grid.Column="3" Background="#F1F5F9" BorderBrush="#CBD5E1" BorderThickness="1" CornerRadius="5"
+                                                                Padding="8,2" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                            <TextBlock Text="{Binding CallNumber}" FontSize="11.5" FontWeight="Bold" Foreground="#0F172A" />
+                                                        </Border>
+
+                                                        <!-- 5. Call Disposition -->
+                                                        <Grid Grid.Column="4" Margin="6,0,6,0" VerticalAlignment="Center">
+                                                            <Border Background="{Binding DispositionInfo.BackgroundHex}"
+                                                                    BorderBrush="{Binding DispositionInfo.BorderHex}"
+                                                                    BorderThickness="1" CornerRadius="6" Padding="7,2" HorizontalAlignment="Left"
+                                                                    Visibility="{Binding HasDisposition, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                                                <TextBlock Text="{Binding CallDisposition}" FontSize="11" FontWeight="SemiBold"
+                                                                           Foreground="{Binding DispositionInfo.ForegroundHex}" TextTrimming="CharacterEllipsis" />
+                                                            </Border>
+                                                            <TextBlock Text="—" FontSize="12" Foreground="#94A3B8">
+                                                                <TextBlock.Style>
+                                                                    <Style TargetType="TextBlock">
+                                                                        <Setter Property="Visibility" Value="Collapsed" />
+                                                                        <Style.Triggers>
+                                                                            <DataTrigger Binding="{Binding HasDisposition}" Value="False">
+                                                                                <Setter Property="Visibility" Value="Visible" />
+                                                                            </DataTrigger>
+                                                                        </Style.Triggers>
+                                                                    </Style>
+                                                                </TextBlock.Style>
+                                                            </TextBlock>
+                                                        </Grid>
+
+                                                        <!-- 6. Notes (single line with ... ellipsis if too long) -->
+                                                        <TextBlock Grid.Column="5" Text="{Binding DisplayNotes}" FontSize="12" Foreground="#334155"
+                                                                   TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"
+                                                                   VerticalAlignment="Center" Margin="6,0,0,0"
+                                                                   ToolTip="{Binding Notes}" />
+                                                    </Grid>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </Border>
+
+                            <Border Background="#F8FAFC" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="8" Padding="14">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                        <Style.Triggers>
+                                            <MultiDataTrigger>
+                                                <MultiDataTrigger.Conditions>
+                                                    <Condition Binding="{Binding HasProfileCallHistory}" Value="False" />
+                                                    <Condition Binding="{Binding IsLoadingProfileHistory}" Value="False" />
+                                                </MultiDataTrigger.Conditions>
+                                                <Setter Property="Visibility" Value="Visible" />
+                                            </MultiDataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                                <TextBlock Text="No call history recorded for this lead yet. Click the green Call button to dial and log a call."
+                                           FontSize="12" Foreground="#94A3B8" HorizontalAlignment="Center" />
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
+
+                    <!-- Modal Footer -->
+                    <Border Grid.Row="2" Background="#F8FAFC" BorderBrush="#E2E8F0" BorderThickness="0,1,0,0" CornerRadius="0,0,14,14" Padding="24,14">
+                        <Grid>
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                <Button Content="Close" Command="{Binding CloseLeadProfileCommand}"
+                                        Style="{StaticResource SecondaryButtonStyle}" Padding="16,8" Margin="0,0,10,0" />
+                                <Button Content="✓ Update Lead" Command="{Binding UpdateLeadProfileCommand}"
+                                        Style="{StaticResource PrimaryButtonStyle}"
+                                        Background="#4F46E5" BorderBrush="#4338CA"
+                                        Padding="18,8"
+                                        Visibility="{Binding HasProfileChanges, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+                </Grid>
+            </Border>
+        </Grid>
 
         <!-- ======================================================== -->
         <!-- MODAL OVERLAY: Assign Leads to Client                    -->

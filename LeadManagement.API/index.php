@@ -132,6 +132,24 @@ try {
         $controller->assignToClient($input);
     }
 
+    elseif (preg_match('#^leads/(\d+)/history$#', $path, $matches) && $method === 'GET') {
+        require_once __DIR__ . '/controllers/LeadController.php';
+        $controller = new LeadController();
+        $controller->history((int)$matches[1]);
+    }
+
+    elseif (preg_match('#^leads/(\d+)/call-history/update$#', $path, $matches) && $method === 'POST') {
+        require_once __DIR__ . '/controllers/LeadController.php';
+        $controller = new LeadController();
+        $controller->updateCallHistory((int)$matches[1], $input);
+    }
+
+    elseif (preg_match('#^leads/(\d+)/call-history$#', $path, $matches) && $method === 'POST') {
+        require_once __DIR__ . '/controllers/LeadController.php';
+        $controller = new LeadController();
+        $controller->logCallHistory((int)$matches[1], $input);
+    }
+
     elseif (($path === 'leads/update' && $method === 'POST') || (preg_match('#^leads/(\d+)$#', $path, $matches) && ($method === 'POST' || $method === 'PUT'))) {
         require_once __DIR__ . '/controllers/LeadController.php';
         $controller = new LeadController();

@@ -64,9 +64,9 @@ class ClientController
             // Assigned lead lists (List 01, List 02, etc.)
             $stmtLists = $this->db->prepare("
                 SELECT cl.id, cl.client_id, cl.list_name, cl.created_at,
-                       COUNT(l.id) AS total_leads
+                       COUNT(lca.lead_id) AS total_leads
                 FROM `client_lists` cl
-                LEFT JOIN `leads` l ON l.client_list_id = cl.id AND l.client_id = cl.client_id
+                LEFT JOIN `lead_client_assignments` lca ON lca.client_list_id = cl.id AND lca.client_id = cl.client_id
                 WHERE cl.client_id = ?
                 GROUP BY cl.id, cl.client_id, cl.list_name, cl.created_at
                 ORDER BY cl.id ASC
@@ -80,8 +80,8 @@ class ClientController
             }
             $client['lists'] = $lists;
 
-            // Total leads assigned to this client from centralized leads masterlist
-            $stmtMasterCount = $this->db->prepare("SELECT COUNT(*) FROM `leads` WHERE `client_id` = ?");
+            // Total leads assigned to this client from multi-client assignments
+            $stmtMasterCount = $this->db->prepare("SELECT COUNT(DISTINCT `lead_id`) FROM `lead_client_assignments` WHERE `client_id` = ?");
             $stmtMasterCount->execute([$clientId]);
             $masterCount = (int)$stmtMasterCount->fetchColumn();
 
@@ -581,16 +581,22 @@ class ClientController
             Response::notFound('Client not found.');
         }
 
-        // Query centralized leads masterlist table first
+        // Query centralized leads via multi-client assignments table first
         $stmtLeads = $this->db->prepare("
-            SELECT * FROM `leads` 
-            WHERE `client_id` = ? 
-            ORDER BY `id` ASC
+            SELECT l.* FROM `leads` l
+            INNER JOIN `lead_client_assignments` lca ON l.id = lca.lead_id
+            WHERE lca.client_id = ?
+            ORDER BY l.id ASC
         ");
         $stmtLeads->execute([$clientId]);
         $leads = $stmtLeads->fetchAll();
 
-        // Fallback to client_leads if empty
+        // Fallback to leads.client_id or client_leads if empty
+        if (empty($leads)) {
+            $stmtDirect = $this->db->prepare("SELECT * FROM `leads` WHERE `client_id` = ? ORDER BY `id` ASC");
+            $stmtDirect->execute([$clientId]);
+            $leads = $stmtDirect->fetchAll();
+        }
         if (empty($leads)) {
             $stmtFallback = $this->db->prepare("
                 SELECT * FROM `client_leads` 
@@ -635,9 +641,10 @@ class ClientController
         }
 
         $stmtLeads = $this->db->prepare("
-            SELECT * FROM `leads`
-            WHERE `client_list_id` = ?
-            ORDER BY `id` ASC
+            SELECT l.* FROM `leads` l
+            INNER JOIN `lead_client_assignments` lca ON l.id = lca.lead_id
+            WHERE lca.client_list_id = ?
+            ORDER BY l.id ASC
         ");
         $stmtLeads->execute([$listId]);
         $leads = $stmtLeads->fetchAll();
@@ -682,9 +689,27 @@ class ClientController
 
         $this->db->beginTransaction();
         try {
-            $upd = $this->db->prepare("UPDATE `leads` SET `client_id` = NULL, `client_list_id` = NULL WHERE `client_list_id` = ?");
+            $delAssign = $this->db->prepare("DELETE FROM `lead_client_assignments` WHERE `client_list_id` = ?");
+            $delAssign->execute([$listId]);
+            $unassignedCount = $delAssign->rowCount();
+
+            // Update primary leads.client_id/client_list_id to next remaining assignment if any, else NULL
+            $upd = $this->db->prepare("
+                UPDATE `leads` l
+                LEFT JOIN (
+                    SELECT lca.lead_id, lca.client_id, lca.client_list_id
+                    FROM `lead_client_assignments` lca
+                    INNER JOIN (
+                        SELECT lead_id, MAX(id) AS max_id
+                        FROM `lead_client_assignments`
+                        GROUP BY lead_id
+                    ) latest ON lca.id = latest.max_id
+                ) next_a ON l.id = next_a.lead_id
+                SET l.`client_id` = next_a.client_id,
+                    l.`client_list_id` = next_a.client_list_id
+                WHERE l.`client_list_id` = ?
+            ");
             $upd->execute([$listId]);
-            $unassignedCount = $upd->rowCount();
 
             $del = $this->db->prepare("DELETE FROM `client_lists` WHERE `id` = ?");
             $del->execute([$listId]);

@@ -793,6 +793,73 @@ namespace LeadManagement.Desktop.Services
             catch (Exception ex) { return (false, $"Error updating lead: {ex.Message}", null); }
         }
 
+        /// <summary>Retrieves assigned clients and call history for a lead via GET /leads/{leadId}/history.</summary>
+        public async Task<(bool Success, string Message, LeadHistoryData? Data)> GetLeadHistoryAsync(int leadId)
+        {
+            try
+            {
+                var response = await _httpClient.GetAsync($"leads/{leadId}/history");
+                var responseBody = await response.Content.ReadAsStringAsync();
+                var result = JsonSerializer.Deserialize<ApiResponse<LeadHistoryData>>(responseBody);
+                if (result == null) return (false, "Unable to parse server response.", null);
+                return (result.Success, result.Message, result.Data);
+            }
+            catch (HttpRequestException) { return (false, "Cannot connect to server. Please ensure XAMPP Apache & MySQL are running.", null); }
+            catch (Exception ex) { return (false, $"Error fetching lead history: {ex.Message}", null); }
+        }
+
+        /// <summary>Records a call history entry for a lead via POST /leads/{leadId}/call-history.</summary>
+        public async Task<(bool Success, string Message, LeadCallHistoryEntry? Entry)> LogLeadCallHistoryAsync(
+            int leadId, int? agentId, string agentName, string disposition, string notes, int callNumber, string? clientName = null)
+        {
+            try
+            {
+                var payload = new
+                {
+                    agent_id = agentId,
+                    agent_name = agentName,
+                    client_name = clientName,
+                    call_disposition = disposition,
+                    notes = notes,
+                    call_number = callNumber
+                };
+                var json = JsonSerializer.Serialize(payload);
+                var content = new StringContent(json, Encoding.UTF8, "application/json");
+                var response = await _httpClient.PostAsync($"leads/{leadId}/call-history", content);
+                var responseBody = await response.Content.ReadAsStringAsync();
+                var result = JsonSerializer.Deserialize<ApiResponse<LeadCallHistoryEntry>>(responseBody);
+                if (result == null) return (false, "Unable to parse server response.", null);
+                return (result.Success, result.Message, result.Data);
+            }
+            catch (HttpRequestException) { return (false, "Cannot connect to server. Please ensure XAMPP Apache & MySQL are running.", null); }
+            catch (Exception ex) { return (false, $"Error logging call history: {ex.Message}", null); }
+        }
+
+        /// <summary>Updates disposition and notes on the active call history entry via POST /leads/{leadId}/call-history/update.</summary>
+        public async Task<(bool Success, string Message)> UpdateLeadCallHistoryAsync(
+            int leadId, int? historyId, int? agentId, string? disposition, string? notes)
+        {
+            try
+            {
+                var payload = new
+                {
+                    history_id = historyId,
+                    agent_id = agentId,
+                    call_disposition = disposition ?? string.Empty,
+                    notes = notes ?? string.Empty
+                };
+                var json = JsonSerializer.Serialize(payload);
+                var content = new StringContent(json, Encoding.UTF8, "application/json");
+                var response = await _httpClient.PostAsync($"leads/{leadId}/call-history/update", content);
+                var responseBody = await response.Content.ReadAsStringAsync();
+                var result = JsonSerializer.Deserialize<ApiResponse<object>>(responseBody);
+                if (result == null) return (false, "Unable to parse server response.");
+                return (result.Success, result.Message);
+            }
+            catch (HttpRequestException) { return (false, "Cannot connect to server. Please ensure XAMPP Apache & MySQL are running."); }
+            catch (Exception ex) { return (false, $"Error updating call history: {ex.Message}"); }
+        }
+
         /// <summary>Retrieves the script for a client via GET /clients/{id}/script.</summary>
         public async Task<(bool Success, string Message, ClientScriptData? Script)> GetClientScriptAsync(int clientId)
         {
