@@ -96,7 +96,7 @@
                             ToolTip="Reload leads from database" />
 
                     <!-- Assign Filtered Leads to Client -->
-                    <Button Content="👥 Assign to Client" 
+                    <Button Content="{Binding AssignToClientButtonText}" 
                             Command="{Binding OpenAssignClientModalCommand}" 
                             Style="{StaticResource PrimaryButtonStyle}"
                             Background="#4F46E5"
@@ -175,7 +175,7 @@
                                 ToolTip="Clear all search terms and reset all dropdown filters" />
                     </Grid>
 
-                    <!-- Row 2: Client, Location & Status Filters (5 Columns) — Multi-Select Checkboxes -->
+                    <!-- Row 2: Client, Location & Sales Filters (5 Columns) — Multi-Select Checkboxes -->
                     <Grid Margin="0,0,0,8">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
@@ -188,42 +188,41 @@
                         <!-- Client (multi-select) -->
                         <controls:MultiSelectDropdown Grid.Column="0"
                                   ItemsSource="{Binding ClientItems}"
-                                  HeaderText="All Clients"
+                                  HeaderText="Clients"
                                   Margin="0,0,8,0"
                                   ToolTip="Filter by Client or Unassigned" />
 
                         <!-- City (multi-select) -->
                         <controls:MultiSelectDropdown Grid.Column="1"
                                   ItemsSource="{Binding CityItems}"
-                                  HeaderText="All Cities"
+                                  HeaderText="Cities"
                                   Margin="0,0,8,0"
                                   ToolTip="Filter by City — select multiple cities" />
 
                         <!-- County (multi-select) -->
                         <controls:MultiSelectDropdown Grid.Column="2"
                                   ItemsSource="{Binding CountyItems}"
-                                  HeaderText="All Counties"
+                                  HeaderText="Counties"
                                   Margin="0,0,8,0"
                                   ToolTip="Filter by County — select multiple counties" />
 
                         <!-- State (multi-select) -->
                         <controls:MultiSelectDropdown Grid.Column="3"
                                   ItemsSource="{Binding StateItems}"
-                                  HeaderText="All States"
+                                  HeaderText="States"
                                   Margin="0,0,8,0"
                                   ToolTip="Filter by State — select multiple states" />
 
-                        <!-- Status (multi-select) -->
+                        <!-- Annual Sales (multi-select) -->
                         <controls:MultiSelectDropdown Grid.Column="4"
-                                  ItemsSource="{Binding StatusItems}"
-                                  HeaderText="All Statuses"
-                                  ToolTip="Filter by Lead Status — select multiple statuses" />
+                                  ItemsSource="{Binding AnnualSalesItems}"
+                                  HeaderText="Sales Ranges"
+                                  ToolTip="Filter by Annual Sales Range — select multiple sales ranges" />
                     </Grid>
 
-                    <!-- Row 3: SIC, NAICS & Financial Classification Filters (5 Columns) — Multi-Select Checkboxes -->
+                    <!-- Row 3: SIC & NAICS Filters (4 Columns) — Multi-Select Checkboxes -->
                     <Grid>
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="*" />
@@ -233,36 +232,29 @@
                         <!-- SIC Code (multi-select) -->
                         <controls:MultiSelectDropdown Grid.Column="0"
                                   ItemsSource="{Binding SicCodeItems}"
-                                  HeaderText="All SIC Codes"
+                                  HeaderText="SIC Codes"
                                   Margin="0,0,8,0"
                                   ToolTip="Filter by SIC Code — select multiple SIC codes" />
 
                         <!-- SIC Description (multi-select) -->
                         <controls:MultiSelectDropdown Grid.Column="1"
                                   ItemsSource="{Binding SicDescItems}"
-                                  HeaderText="All SIC Descriptions"
+                                  HeaderText="SIC Descriptions"
                                   Margin="0,0,8,0"
                                   ToolTip="Filter by SIC Description — select multiple SIC descriptions" />
 
                         <!-- NAICS Code (multi-select) -->
                         <controls:MultiSelectDropdown Grid.Column="2"
                                   ItemsSource="{Binding NaicsCodeItems}"
-                                  HeaderText="All NAICS Codes"
+                                  HeaderText="NAICS Codes"
                                   Margin="0,0,8,0"
                                   ToolTip="Filter by NAICS Code — select multiple NAICS codes" />
 
                         <!-- NAICS Description (multi-select) -->
                         <controls:MultiSelectDropdown Grid.Column="3"
                                   ItemsSource="{Binding NaicsDescItems}"
-                                  HeaderText="All NAICS Descriptions"
-                                  Margin="0,0,8,0"
+                                  HeaderText="NAICS Descriptions"
                                   ToolTip="Filter by NAICS Description — select multiple NAICS descriptions" />
-
-                        <!-- Annual Sales (multi-select) -->
-                        <controls:MultiSelectDropdown Grid.Column="4"
-                                  ItemsSource="{Binding AnnualSalesItems}"
-                                  HeaderText="All Sales Ranges"
-                                  ToolTip="Filter by Annual Sales Range — select multiple sales ranges" />
                     </Grid>
                 </StackPanel>
             </Border>
@@ -288,56 +280,6 @@
                           HorizontalScrollBarVisibility="Auto"
                           Sorting="OnDataGridSorting" SelectionChanged="DataGrid_SelectionChanged">
                 <DataGrid.Columns>
-
-                    <!-- Status Column (Retained & Highlighted) -->
-                    <DataGridTemplateColumn Header="STATUS" Width="120" CanUserSort="True" SortMemberPath="Status">
-                        <DataGridTemplateColumn.CellTemplate>
-                            <DataTemplate>
-                                <Border CornerRadius="12" Padding="10,4" BorderThickness="1" HorizontalAlignment="Left" VerticalAlignment="Center">
-                                    <Border.Style>
-                                        <Style TargetType="Border">
-                                            <Setter Property="Background" Value="#EFF6FF" />
-                                            <Setter Property="BorderBrush" Value="#BFDBFE" />
-                                            <Style.Triggers>
-                                               <DataTrigger Binding="{Binding Status}" Value="Qualified">
-                                                    <Setter Property="Background" Value="#ECFDF5" />
-                                                    <Setter Property="BorderBrush" Value="#A7F3D0" />
-                                                </DataTrigger>
-                                                <DataTrigger Binding="{Binding Status}" Value="Follow-up">
-                                                    <Setter Property="Background" Value="#FFFBEB" />
-                                                    <Setter Property="BorderBrush" Value="#FDE68A" />
-                                                </DataTrigger>
-                                                <DataTrigger Binding="{Binding Status}" Value="Contacted">
-                                                    <Setter Property="Background" Value="#F5F3FF" />
-                                                    <Setter Property="BorderBrush" Value="#DDD6FE" />
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </Border.Style>
-                                    <TextBox Text="{Binding Status, Mode=OneWay}" 
-                                             FontSize="11" 
-                                             FontWeight="SemiBold">
-                                        <TextBox.Style>
-                                            <Style TargetType="TextBox" BasedOn="{StaticResource SelectableTextStyle}">
-                                                <Setter Property="Foreground" Value="#1D4ED8" />
-                                                <Style.Triggers>
-                                                    <DataTrigger Binding="{Binding Status}" Value="Qualified">
-                                                        <Setter Property="Foreground" Value="#047857" />
-                                                    </DataTrigger>
-                                                    <DataTrigger Binding="{Binding Status}" Value="Follow-up">
-                                                        <Setter Property="Foreground" Value="#B45309" />
-                                                    </DataTrigger>
-                                                    <DataTrigger Binding="{Binding Status}" Value="Contacted">
-                                                        <Setter Property="Foreground" Value="#6D28D9" />
-                                                    </DataTrigger>
-                                                </Style.Triggers>
-                                            </Style>
-                                        </TextBox.Style>
-                                    </TextBox>
-                                </Border>
-                            </DataTemplate>
-                        </DataGridTemplateColumn.CellTemplate>
-                    </DataGridTemplateColumn>
 
                     <!-- 1. DATE with Calendar Picker (Editable) -->
                     <DataGridTemplateColumn Header="DATE" Width="135" CanUserSort="True" SortMemberPath="SelectedDate">

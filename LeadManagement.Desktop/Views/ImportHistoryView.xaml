@@ -197,54 +197,6 @@
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
 
-                        <!-- Initial Status -->
-                        <DataGridTemplateColumn Header="INITIAL STATUS" Width="130" CanUserSort="True" SortMemberPath="InitialStatus">
-                            <DataGridTemplateColumn.CellTemplate>
-                                <DataTemplate>
-                                    <Border CornerRadius="10" Padding="10,3" BorderThickness="1" HorizontalAlignment="Left" VerticalAlignment="Center">
-                                        <Border.Style>
-                                            <Style TargetType="Border">
-                                                <Setter Property="Background" Value="#EFF6FF" />
-                                                <Setter Property="BorderBrush" Value="#BFDBFE" />
-                                                <Style.Triggers>
-                                                    <DataTrigger Binding="{Binding InitialStatus}" Value="Qualified">
-                                                        <Setter Property="Background" Value="#ECFDF5" />
-                                                        <Setter Property="BorderBrush" Value="#A7F3D0" />
-                                                    </DataTrigger>
-                                                    <DataTrigger Binding="{Binding InitialStatus}" Value="Follow-up">
-                                                        <Setter Property="Background" Value="#FFFBEB" />
-                                                        <Setter Property="BorderBrush" Value="#FDE68A" />
-                                                    </DataTrigger>
-                                                    <DataTrigger Binding="{Binding InitialStatus}" Value="Contacted">
-                                                        <Setter Property="Background" Value="#F5F3FF" />
-                                                        <Setter Property="BorderBrush" Value="#DDD6FE" />
-                                                    </DataTrigger>
-                                                </Style.Triggers>
-                                            </Style>
-                                        </Border.Style>
-                                        <TextBlock Text="{Binding InitialStatus}" FontSize="11" FontWeight="SemiBold">
-                                            <TextBlock.Style>
-                                                <Style TargetType="TextBlock">
-                                                    <Setter Property="Foreground" Value="#1D4ED8" />
-                                                    <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding InitialStatus}" Value="Qualified">
-                                                            <Setter Property="Foreground" Value="#047857" />
-                                                        </DataTrigger>
-                                                        <DataTrigger Binding="{Binding InitialStatus}" Value="Follow-up">
-                                                            <Setter Property="Foreground" Value="#B45309" />
-                                                        </DataTrigger>
-                                                        <DataTrigger Binding="{Binding InitialStatus}" Value="Contacted">
-                                                            <Setter Property="Foreground" Value="#6D28D9" />
-                                                        </DataTrigger>
-                                                    </Style.Triggers>
-                                                </Style>
-                                            </TextBlock.Style>
-                                        </TextBlock>
-                                    </Border>
-                                </DataTemplate>
-                            </DataGridTemplateColumn.CellTemplate>
-                        </DataGridTemplateColumn>
-
                         <!-- Imported By -->
                         <DataGridTemplateColumn Header="IMPORTED BY" Width="160" CanUserSort="True" SortMemberPath="ImportedByUsername">
                             <DataGridTemplateColumn.CellTemplate>
@@ -435,54 +387,6 @@
                               HorizontalScrollBarVisibility="Auto"
                               MinHeight="180">
                         <DataGrid.Columns>
-
-                            <!-- Status -->
-                            <DataGridTemplateColumn Header="STATUS" Width="120" CanUserSort="True" SortMemberPath="Status">
-                                <DataGridTemplateColumn.CellTemplate>
-                                    <DataTemplate>
-                                        <Border CornerRadius="12" Padding="10,4" BorderThickness="1" HorizontalAlignment="Left" VerticalAlignment="Center">
-                                            <Border.Style>
-                                                <Style TargetType="Border">
-                                                    <Setter Property="Background" Value="#EFF6FF" />
-                                                    <Setter Property="BorderBrush" Value="#BFDBFE" />
-                                                    <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding Status}" Value="Qualified">
-                                                            <Setter Property="Background" Value="#ECFDF5" />
-                                                            <Setter Property="BorderBrush" Value="#A7F3D0" />
-                                                        </DataTrigger>
-                                                        <DataTrigger Binding="{Binding Status}" Value="Follow-up">
-                                                            <Setter Property="Background" Value="#FFFBEB" />
-                                                            <Setter Property="BorderBrush" Value="#FDE68A" />
-                                                        </DataTrigger>
-                                                        <DataTrigger Binding="{Binding Status}" Value="Contacted">
-                                                            <Setter Property="Background" Value="#F5F3FF" />
-                                                            <Setter Property="BorderBrush" Value="#DDD6FE" />
-                                                        </DataTrigger>
-                                                    </Style.Triggers>
-                                                </Style>
-                                            </Border.Style>
-                                            <TextBlock Text="{Binding Status}" FontSize="11" FontWeight="SemiBold">
-                                                <TextBlock.Style>
-                                                    <Style TargetType="TextBlock">
-                                                        <Setter Property="Foreground" Value="#1D4ED8" />
-                                                        <Style.Triggers>
-                                                            <DataTrigger Binding="{Binding Status}" Value="Qualified">
-                                                                <Setter Property="Foreground" Value="#047857" />
-                                                            </DataTrigger>
-                                                            <DataTrigger Binding="{Binding Status}" Value="Follow-up">
-                                                                <Setter Property="Foreground" Value="#B45309" />
-                                                            </DataTrigger>
-                                                            <DataTrigger Binding="{Binding Status}" Value="Contacted">
-                                                                <Setter Property="Foreground" Value="#6D28D9" />
-                                                            </DataTrigger>
-                                                        </Style.Triggers>
-                                                    </Style>
-                                                </TextBlock.Style>
-                                            </TextBlock>
-                                        </Border>
-                                    </DataTemplate>
-                                </DataGridTemplateColumn.CellTemplate>
-                            </DataGridTemplateColumn>
 
                             <!-- Business Name -->
                             <DataGridTemplateColumn Header="BUSINESS NAME" Width="220" CanUserSort="True" SortMemberPath="BusinessName">

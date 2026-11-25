@@ -185,6 +185,19 @@ try {
         $controller->clientLeads((int)$matches[1]);
     }
 
+    elseif (preg_match('#^clients/lists/(\d+)/leads$#', $path, $matches) && $method === 'GET') {
+        require_once __DIR__ . '/controllers/ClientController.php';
+        $controller = new ClientController();
+        $controller->listLeads((int)$matches[1]);
+    }
+
+    elseif ((preg_match('#^clients/lists/(\d+)$#', $path, $matches) && $method === 'DELETE') || ($path === 'clients/lists/delete' && $method === 'POST')) {
+        require_once __DIR__ . '/controllers/ClientController.php';
+        $controller = new ClientController();
+        $listId = isset($matches[1]) ? (int)$matches[1] : (int)($input['id'] ?? $input['list_id'] ?? 0);
+        $controller->deleteList($listId);
+    }
+
     elseif (($path === 'clients/leads/update' && $method === 'POST') || (preg_match('#^clients/leads/(\d+)$#', $path, $matches) && ($method === 'POST' || $method === 'PUT'))) {
         require_once __DIR__ . '/controllers/ClientController.php';
         $controller = new ClientController();

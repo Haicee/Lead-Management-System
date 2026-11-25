@@ -728,12 +728,34 @@ class LeadController
         }
         $clientName = trim($client['first_name'] . ' ' . $client['last_name']);
 
+        // Helper to generate next sequential List XX name for this client
+        $createClientList = function(int $cid): array {
+            $stmtLists = $this->db->prepare("SELECT `list_name` FROM `client_lists` WHERE `client_id` = ?");
+            $stmtLists->execute([$cid]);
+            $existingNames = $stmtLists->fetchAll(PDO::FETCH_COLUMN);
+            $maxNum = 0;
+            foreach ($existingNames as $name) {
+                if (preg_match('/(\d+)$/', (string)$name, $m)) {
+                    $num = (int)$m[1];
+                    if ($num > $maxNum) $maxNum = $num;
+                }
+            }
+            $nextNum = $maxNum + 1;
+            $listName = sprintf('List %02d', $nextNum);
+
+            $insList = $this->db->prepare("INSERT INTO `client_lists` (`client_id`, `list_name`) VALUES (?, ?)");
+            $insList->execute([$cid, $listName]);
+            return [(int)$this->db->lastInsertId(), $listName];
+        };
+
         // Case 1: Specific lead IDs provided
         if (!empty($input['lead_ids']) && is_array($input['lead_ids'])) {
             $leadIds = array_values(array_filter(array_map('intval', $input['lead_ids']), fn($id) => $id > 0));
             if (empty($leadIds)) {
                 Response::error('No valid lead records selected.', 422);
             }
+
+            [$listId, $listName] = $createClientList($clientId);
 
             // High performance chunked update
             $chunkSize = 500;
@@ -742,24 +764,30 @@ class LeadController
 
             foreach ($idChunks as $chunk) {
                 $placeholders = implode(',', array_fill(0, count($chunk), '?'));
-                $sql = "UPDATE `leads` SET `client_id` = ? WHERE `id` IN ({$placeholders})";
+                $sql = "UPDATE `leads` SET `client_id` = ?, `client_list_id` = ? WHERE `id` IN ({$placeholders})";
                 $stmt = $this->db->prepare($sql);
-                $params = array_merge([$clientId], $chunk);
+                $params = array_merge([$clientId, $listId], $chunk);
                 $stmt->execute($params);
                 $totalUpdated += $stmt->rowCount();
+            }
+
+            if ($totalUpdated === 0) {
+                $this->db->prepare("DELETE FROM `client_lists` WHERE `id` = ?")->execute([$listId]);
             }
 
             ActivityLogger::log(
                 'CLIENT_ASSIGN',
                 'Assigned Leads to Client',
-                "Assigned {$totalUpdated} lead(s) to client '{$clientName}'"
+                "Assigned {$totalUpdated} lead(s) to client '{$clientName}' ({$listName})"
             );
 
             Response::success([
                 'assigned_count' => $totalUpdated,
                 'client_id'      => $clientId,
-                'client_name'    => $clientName
-            ], "Successfully assigned {$totalUpdated} lead(s) to {$clientName}.");
+                'client_name'    => $clientName,
+                'list_id'        => $listId,
+                'list_name'      => $listName
+            ], "Successfully assigned {$totalUpdated} lead(s) to {$clientName} ({$listName}).");
             return;
         }
 
@@ -818,21 +846,29 @@ class LeadController
 
         $whereClause = !empty($conditions) ? 'WHERE ' . implode(' AND ', $conditions) : '';
 
-        $sql = "UPDATE `leads` SET `client_id` = ? {$whereClause}";
+        [$listId, $listName] = $createClientList($clientId);
+
+        $sql = "UPDATE `leads` SET `client_id` = ?, `client_list_id` = ? {$whereClause}";
         $stmt = $this->db->prepare($sql);
-        $stmt->execute(array_merge([$clientId], $params));
+        $stmt->execute(array_merge([$clientId, $listId], $params));
         $affected = $stmt->rowCount();
+
+        if ($affected === 0) {
+            $this->db->prepare("DELETE FROM `client_lists` WHERE `id` = ?")->execute([$listId]);
+        }
 
         ActivityLogger::log(
             'CLIENT_ASSIGN',
             'Assigned Filtered Leads to Client',
-            "Assigned {$affected} filtered lead(s) to client '{$clientName}'"
+            "Assigned {$affected} filtered lead(s) to client '{$clientName}' ({$listName})"
         );
 
         Response::success([
             'assigned_count' => $affected,
             'client_id'      => $clientId,
-            'client_name'    => $clientName
-        ], "Successfully assigned {$affected} lead(s) to {$clientName}.");
+            'client_name'    => $clientName,
+            'list_id'        => $listId,
+            'list_name'      => $listName
+        ], "Successfully assigned {$affected} lead(s) to {$clientName} ({$listName}).");
     }
 }

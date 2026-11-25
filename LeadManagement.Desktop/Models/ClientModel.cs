@@ -18,6 +18,8 @@ namespace LeadManagement.Desktop.Models
         private string _createdAt = string.Empty;
         private string _updatedAt = string.Empty;
         private List<ClientFileModel> _files = new();
+        private List<ClientListModel> _lists = new();
+        private int _totalLeads;
         private List<UserModel> _assignedAgents = new();
         private bool _isExpanded;
         private bool _isAssignDropdownOpen;
@@ -92,6 +94,22 @@ namespace LeadManagement.Desktop.Models
                 {
                     OnPropertyChanged(nameof(FileCount));
                     OnPropertyChanged(nameof(TotalLeads));
+                    OnPropertyChanged(nameof(HasLeads));
+                }
+            }
+        }
+
+        [JsonPropertyName("lists")]
+        public List<ClientListModel> Lists
+        {
+            get => _lists;
+            set
+            {
+                if (SetProperty(ref _lists, value))
+                {
+                    OnPropertyChanged(nameof(ListCount));
+                    OnPropertyChanged(nameof(HasLists));
+                    OnPropertyChanged(nameof(HasLeads));
                 }
             }
         }
@@ -261,10 +279,22 @@ namespace LeadManagement.Desktop.Models
         }
 
         [JsonIgnore]
+        public int ListCount => Lists?.Count ?? 0;
+
+        [JsonIgnore]
+        public bool HasLists => Lists != null && Lists.Count > 0;
+
+        [JsonPropertyName("total_leads")]
         public int TotalLeads
         {
-            get => Files?.Sum(f => f.TotalLeads) ?? 0;
-            set { }
+            get => _totalLeads > 0 ? _totalLeads : (Lists?.Count > 0 ? System.Linq.Enumerable.Sum(Lists, l => l.TotalLeads) : (Files != null ? System.Linq.Enumerable.Sum(Files, f => f.TotalLeads) : 0));
+            set
+            {
+                if (SetProperty(ref _totalLeads, value))
+                {
+                    OnPropertyChanged(nameof(HasLeads));
+                }
+            }
         }
 
         [JsonIgnore]
@@ -355,7 +385,7 @@ namespace LeadManagement.Desktop.Models
         }
 
         [JsonIgnore]
-        public bool HasLeads => (Leads != null && Leads.Count > 0) || TotalLeads > 0;
+        public bool HasLeads => (Leads != null && Leads.Count > 0) || (Lists != null && Lists.Count > 0) || TotalLeads > 0;
 
         [JsonIgnore]
         public ObservableCollection<string> AssignedAgentNames

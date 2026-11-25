@@ -119,6 +119,9 @@ namespace LeadManagement.Desktop.ViewModels
             ViewClientLeadsCommand = new RelayCommand<ClientModel>(async c => await ExecuteViewClientLeadsAsync(c));
             ExportClientLeadsCommand = new RelayCommand<ClientModel>(async c => await ExecuteExportClientLeadsAsync(c));
             RefreshClientLeadsCommand = new RelayCommand<ClientModel>(async c => await LoadClientLeadsAsync(c));
+            ViewClientListCommand   = new RelayCommand<ClientListModel>(async l => await ExecuteViewClientListAsync(l));
+            ExportClientListCommand = new RelayCommand<ClientListModel>(async l => await ExecuteExportClientListAsync(l));
+            DeleteClientListCommand = new RelayCommand<ClientListModel>(async l => await ExecuteDeleteClientListAsync(l));
             ClosePreviewCommand  = new RelayCommand(ExecuteClosePreview);
             DismissBannerCommand = new RelayCommand(ExecuteDismissBanner);
             CallLeadCommand      = new RelayCommand<LeadModel>(ExecuteCallLead);
@@ -356,6 +359,9 @@ namespace LeadManagement.Desktop.ViewModels
         public ICommand ViewClientLeadsCommand { get; }
         public ICommand ExportClientLeadsCommand { get; }
         public ICommand RefreshClientLeadsCommand { get; }
+        public ICommand ViewClientListCommand { get; }
+        public ICommand ExportClientListCommand { get; }
+        public ICommand DeleteClientListCommand { get; }
         public ICommand ClosePreviewCommand { get; }
         public ICommand DismissBannerCommand { get; }
         public ICommand CallLeadCommand { get; }
@@ -414,6 +420,13 @@ namespace LeadManagement.Desktop.ViewModels
                     _agentSelectionMap.Clear();
                     foreach (var client in clients)
                     {
+                        if (client.Lists != null)
+                        {
+                            foreach (var lst in client.Lists)
+                            {
+                                lst.ClientName = client.FullName;
+                            }
+                        }
                         RebuildAgentSelection(client);
                         if (expandedIds.Contains(client.Id))
                         {
@@ -1342,53 +1355,292 @@ namespace LeadManagement.Desktop.ViewModels
             var savePath = saveDlg.FileName;
             try
             {
-                using var workbook = new XLWorkbook();
-                var ws = workbook.Worksheets.Add("Leads");
-
-                string[] headers = new[]
-                {
-                    "DATE", "CALL DISPOSITION", "AGENT", "NOTES", "# OF CALL",
-                    "CELL NUMBER", "BUSINESS NAME", "ADDRESS", "CITY", "COUNTY",
-                    "STATE", "ZIP CODE", "EMAIL", "STATUS"
-                };
-
-                for (int c = 0; c < headers.Length; c++)
-                {
-                    var cell = ws.Cell(1, c + 1);
-                    cell.SetValue(headers[c]);
-                    cell.Style.Font.Bold = true;
-                    cell.Style.Fill.BackgroundColor = XLColor.FromHtml("#1E293B");
-                    cell.Style.Font.FontColor = XLColor.White;
-                }
-
-                int row = 2;
-                foreach (var l in leads)
-                {
-                    ws.Cell(row, 1).SetValue(l.CallDate);
-                    ws.Cell(row, 2).SetValue(l.CallDisposition);
-                    ws.Cell(row, 3).SetValue(l.AssignedAgent);
-                    ws.Cell(row, 4).SetValue(l.Notes);
-                    ws.Cell(row, 5).SetValue(l.CallCount);
-                    ws.Cell(row, 6).SetValue(l.CellNumber);
-                    ws.Cell(row, 7).SetValue(l.BusinessName);
-                    ws.Cell(row, 8).SetValue(l.Address);
-                    ws.Cell(row, 9).SetValue(l.City);
-                    ws.Cell(row, 10).SetValue(l.County);
-                    ws.Cell(row, 11).SetValue(l.State);
-                    ws.Cell(row, 12).SetValue(l.ZipCode);
-                    ws.Cell(row, 13).SetValue(l.Email);
-                    ws.Cell(row, 14).SetValue(l.Status);
-                    row++;
-                }
-
-                ws.Columns().AdjustToContents();
-                workbook.SaveAs(savePath);
+                await Task.Run(() => WriteLeadsToFile(savePath, "Leads", leads, isCsv: false, System.Threading.CancellationToken.None));
 
                 ShowBanner($"Successfully exported {leads.Count:N0} leads for {client.FullName}!");
             }
             catch (Exception ex)
             {
                 ShowBanner($"Export failed: {ex.Message}", isError: true);
+            }
+        }
+
+        private static void WriteLeadsToFile(string savePath, string sheetName, IList<LeadModel> leads, bool isCsv, System.Threading.CancellationToken ct)
+        {
+            var headers = new[]
+            {
+                "DATE", "CALL DISPOSITION", "AGENT", "NOTES", "# OF CALL",
+                "CELL NUMBER", "BUSINESS NAME", "TITLE", "CONTACT NAME", "EMAIL",
+                "ADDRESS", "CITY", "COUNTY", "STATE", "ZIP CODE", "FAX",
+                "ANNUAL SALES", "NUMBER OF EMPLOYEES", "WEBSITE", "SIC CODE",
+                "SIC DESCRIPTION", "NAICS CODE", "NAICS DESCRIPTION"
+            };
+
+            if (isCsv)
+            {
+                using var writer = new StreamWriter(savePath, false, System.Text.Encoding.UTF8);
+                static string EscapeCsv(string? val)
+                {
+                    if (val == null) return "";
+                    if (val.Contains(',') || val.Contains('"') || val.Contains('\n') || val.Contains('\r'))
+                        return $"\"{val.Replace("\"", "\"\"")}\"";
+                    return val;
+                }
+
+                writer.WriteLine(string.Join(",", headers.Select(EscapeCsv)));
+                foreach (var lead in leads)
+                {
+                    ct.ThrowIfCancellationRequested();
+                    var rowVals = new[]
+                    {
+                        lead.CallDate, lead.CallDisposition, lead.AssignedAgent, lead.Notes, lead.CallCount.ToString(),
+                        lead.CellNumber, lead.BusinessName, lead.Title, lead.ContactName, lead.Email,
+                        lead.Address, lead.City, lead.County, lead.State, lead.ZipCode, lead.Fax,
+                        lead.AnnualSales, lead.NumberOfEmployees, lead.Website, lead.SicCode,
+                        lead.SicDescription, lead.NaicsCode, lead.NaicsDescription
+                    };
+                    writer.WriteLine(string.Join(",", rowVals.Select(EscapeCsv)));
+                }
+                return;
+            }
+
+            using var workbook = new XLWorkbook();
+            var ws = workbook.Worksheets.Add(sheetName);
+
+            for (int col = 0; col < headers.Length; col++)
+            {
+                var cell = ws.Cell(1, col + 1);
+                cell.Value = headers[col];
+                cell.Style.Font.Bold = true;
+                cell.Style.Font.FontColor = XLColor.White;
+                cell.Style.Fill.BackgroundColor = XLColor.FromHtml("#0F172A");
+                cell.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+            }
+
+            int row = 2;
+            foreach (var lead in leads)
+            {
+                ct.ThrowIfCancellationRequested();
+                ws.Cell(row, 1).SetValue(lead.CallDate ?? string.Empty);
+                ws.Cell(row, 2).SetValue(lead.CallDisposition ?? string.Empty);
+                ws.Cell(row, 3).SetValue(lead.AssignedAgent ?? string.Empty);
+                ws.Cell(row, 4).SetValue(lead.Notes ?? string.Empty);
+                ws.Cell(row, 5).SetValue(lead.CallCount);
+                ws.Cell(row, 6).SetValue(lead.CellNumber ?? string.Empty);
+                ws.Cell(row, 7).SetValue(lead.BusinessName ?? string.Empty);
+                ws.Cell(row, 8).SetValue(lead.Title ?? string.Empty);
+                ws.Cell(row, 9).SetValue(lead.ContactName ?? string.Empty);
+                ws.Cell(row, 10).SetValue(lead.Email ?? string.Empty);
+                ws.Cell(row, 11).SetValue(lead.Address ?? string.Empty);
+                ws.Cell(row, 12).SetValue(lead.City ?? string.Empty);
+                ws.Cell(row, 13).SetValue(lead.County ?? string.Empty);
+                ws.Cell(row, 14).SetValue(lead.State ?? string.Empty);
+                ws.Cell(row, 15).SetValue(lead.ZipCode ?? string.Empty);
+                ws.Cell(row, 16).SetValue(lead.Fax ?? string.Empty);
+                ws.Cell(row, 17).SetValue(lead.AnnualSales ?? string.Empty);
+                ws.Cell(row, 18).SetValue(lead.NumberOfEmployees ?? string.Empty);
+                ws.Cell(row, 19).SetValue(lead.Website ?? string.Empty);
+                ws.Cell(row, 20).SetValue(lead.SicCode ?? string.Empty);
+                ws.Cell(row, 21).SetValue(lead.SicDescription ?? string.Empty);
+                ws.Cell(row, 22).SetValue(lead.NaicsCode ?? string.Empty);
+                ws.Cell(row, 23).SetValue(lead.NaicsDescription ?? string.Empty);
+                row++;
+            }
+
+            ws.Columns().AdjustToContents();
+            workbook.SaveAs(savePath);
+        }
+
+        // ----------------------------------------------------------------
+        // Assigned Client Lists (List 01, List 02, ...): View, Export, Delete
+        // ----------------------------------------------------------------
+        private async Task ExecuteViewClientListAsync(ClientListModel? list)
+        {
+            if (list == null) return;
+
+            IsLoadingPreview  = true;
+            IsPreviewOpen     = true;
+            PreviewTitle      = $"{list.ClientName} — {list.ListName}";
+            PreviewSubtitle   = $"{list.ClientName}  ·  {list.ListName}  ·  {list.TotalLeads:N0} leads  ·  {list.FormattedDate}";
+            PreviewSearchText = string.Empty;
+            _allPreviewLeads.Clear();
+            FilteredPreviewLeads = new ObservableCollection<LeadModel>();
+
+            _ = Task.Run(() => ZoomPhoneService.EnsureZoomRunning());
+
+            try
+            {
+                var (ok, msg, data) = await ApiService.Instance.GetClientListLeadsAsync(list.Id);
+                if (ok && data?.Leads != null)
+                {
+                    _allPreviewLeads = data.Leads;
+
+                    var targetClientId = list.ClientId > 0 ? list.ClientId : data.ClientId;
+                    var client = Clients.FirstOrDefault(c => c.Id == targetClientId)
+                                 ?? Clients.FirstOrDefault(c => c.FullName.Equals(list.ClientName, StringComparison.OrdinalIgnoreCase));
+
+                    client?.UpdateAssignedAgentNames();
+
+                    var agentNames = new ObservableCollection<string> { "" };
+
+                    if (client?.AssignedAgents != null && client.AssignedAgents.Count > 0)
+                    {
+                        foreach (var a in client.AssignedAgents)
+                        {
+                            var name = !string.IsNullOrWhiteSpace(a.FullName) ? a.FullName.Trim() : a.Username.Trim();
+                            if (!string.IsNullOrWhiteSpace(name) && !agentNames.Contains(name))
+                                agentNames.Add(name);
+                        }
+                    }
+
+                    if (client?.AssignedAgentNames != null)
+                    {
+                        foreach (var name in client.AssignedAgentNames)
+                        {
+                            if (!string.IsNullOrWhiteSpace(name) && !agentNames.Contains(name.Trim()))
+                                agentNames.Add(name.Trim());
+                        }
+                    }
+
+                    foreach (var lead in _allPreviewLeads)
+                    {
+                        if (!string.IsNullOrWhiteSpace(lead.AssignedAgent) && !agentNames.Contains(lead.AssignedAgent.Trim()))
+                            agentNames.Add(lead.AssignedAgent.Trim());
+                    }
+
+                    if (client != null)
+                        client.AssignedAgentNames = agentNames;
+
+                    foreach (var lead in _allPreviewLeads)
+                    {
+                        lead.AvailableAgentOptions = agentNames;
+                        lead.OnFieldChanged = (l, field) => SyncLeadField(l, field);
+                    }
+
+                    PreviewSubtitle = $"{list.ClientName}  ·  {list.ListName}  ·  {_allPreviewLeads.Count:N0} leads  ·  {list.FormattedDate}";
+                    ApplyPreviewSearch();
+                }
+                else
+                {
+                    ShowBanner($"Could not load list leads: {msg}", isError: true);
+                    IsPreviewOpen = false;
+                }
+            }
+            catch (Exception ex)
+            {
+                ShowBanner($"Preview error: {ex.Message}", isError: true);
+                IsPreviewOpen = false;
+            }
+            finally
+            {
+                IsLoadingPreview = false;
+            }
+        }
+
+        private async Task ExecuteExportClientListAsync(ClientListModel? list)
+        {
+            if (list == null) return;
+
+            var clientDisplayName = !string.IsNullOrWhiteSpace(list.ClientName)
+                ? list.ClientName
+                : (Clients.FirstOrDefault(c => c.Id == list.ClientId)?.FullName ?? $"Client {list.ClientId}");
+
+            var sfd = new SaveFileDialog
+            {
+                Title = $"Export {clientDisplayName} {list.ListName}",
+                FileName = $"{clientDisplayName} {list.ListName}.xlsx",
+                Filter = "Excel Workbook (*.xlsx)|*.xlsx|CSV File (*.csv)|*.csv",
+                FilterIndex = 1
+            };
+
+            if (sfd.ShowDialog() != true) return;
+
+            var savePath = sfd.FileName;
+            var isSaveCsv = savePath.EndsWith(".csv", StringComparison.OrdinalIgnoreCase);
+
+            _loadingCts?.Dispose();
+            _loadingCts = new System.Threading.CancellationTokenSource();
+            var ct = _loadingCts.Token;
+
+            LoadingModalTitle   = "Exporting Assigned List";
+            LoadingModalMessage = $"Fetching leads for '{clientDisplayName} {list.ListName}'...";
+            LoadingModalDetail  = "Retrieving real-time dispositions, call counts, and agent notes...";
+            IsLoadingModalOpen  = true;
+
+            try
+            {
+                var (ok, msg, data) = await ApiService.Instance.GetClientListLeadsAsync(list.Id, ct);
+                if (!ok || data?.Leads == null)
+                {
+                    if (ct.IsCancellationRequested) return;
+                    ShowBanner($"Export failed: {msg}", isError: true);
+                    return;
+                }
+
+                var leads = data.Leads;
+                if (leads.Count == 0)
+                {
+                    ShowBanner($"No leads found in {list.ListName} to export.", isError: true);
+                    return;
+                }
+
+                LoadingModalMessage = $"Writing {leads.Count:N0} records to '{Path.GetFileName(savePath)}'...";
+                LoadingModalDetail  = "Building formatted spreadsheet with updated CRM columns...";
+
+                await Task.Run(() => WriteLeadsToFile(savePath, list.ListName, leads, isSaveCsv, ct), ct);
+
+                _ = ApiService.Instance.LogActivityAsync(
+                    "EXPORT",
+                    "Exported Assigned List",
+                    $"Exported {leads.Count:N0} leads from '{clientDisplayName} {list.ListName}' to {Path.GetFileName(savePath)}",
+                    leads.Count
+                );
+
+                ShowBanner($"✓ Exported {leads.Count:N0} leads to '{Path.GetFileName(savePath)}'.", isError: false);
+            }
+            catch (OperationCanceledException)
+            {
+                try { if (File.Exists(savePath)) File.Delete(savePath); } catch { }
+                ShowBanner("Export cancelled by user.", isError: false);
+            }
+            catch (Exception ex)
+            {
+                ShowBanner($"Export error: {ex.Message}", isError: true);
+            }
+            finally
+            {
+                IsLoadingModalOpen = false;
+            }
+        }
+
+        private async Task ExecuteDeleteClientListAsync(ClientListModel? list)
+        {
+            if (list == null) return;
+
+            var clientDisplayName = !string.IsNullOrWhiteSpace(list.ClientName)
+                ? list.ClientName
+                : (Clients.FirstOrDefault(c => c.Id == list.ClientId)?.FullName ?? $"Client {list.ClientId}");
+
+            var confirm = System.Windows.MessageBox.Show(
+                $"Delete '{list.ListName}' from {clientDisplayName}?\n\nThis will unassign all {list.TotalLeads:N0} lead(s) in this list from {clientDisplayName} (the leads will remain in the Lead Masterlist).",
+                "Delete Assigned List",
+                System.Windows.MessageBoxButton.YesNo,
+                System.Windows.MessageBoxImage.Warning);
+
+            if (confirm != System.Windows.MessageBoxResult.Yes) return;
+
+            var (ok, msg) = await ApiService.Instance.DeleteClientListAsync(list.Id);
+            if (ok)
+            {
+                if (IsPreviewOpen && PreviewTitle.Contains(list.ListName))
+                    ExecuteClosePreview();
+
+                ShowBanner($"✓ '{list.ListName}' removed from {clientDisplayName} and leads unassigned.", isError: false);
+                await LoadClientsAsync(preserveBanner: true);
+            }
+            else
+            {
+                ShowBanner($"Delete failed: {msg}", isError: true);
             }
         }
 

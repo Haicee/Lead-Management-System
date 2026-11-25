@@ -324,6 +324,11 @@ namespace LeadManagement.Desktop.ViewModels
             }
         }
 
+        public string AssignToClientButtonText =>
+            HasActiveFilters
+                ? $"👥 Assign to Client ({FilteredCount:N0})"
+                : "👥 Assign to Client";
+
         public string ExportFilteredButtonText =>
             HasActiveFilters
                 ? $"⤓ Export Filtered ({FilteredCount:N0})"
@@ -529,6 +534,7 @@ namespace LeadManagement.Desktop.ViewModels
             OnPropertyChanged(nameof(HasActiveFilters));
             OnPropertyChanged(nameof(ExportFilteredButtonText));
             OnPropertyChanged(nameof(ExportAllButtonText));
+            OnPropertyChanged(nameof(AssignToClientButtonText));
         }
 
         private void ExecuteClearFilters()

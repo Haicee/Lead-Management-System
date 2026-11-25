@@ -740,6 +740,42 @@ namespace LeadManagement.Desktop.Services
             catch (Exception ex) { return (false, $"Error fetching client leads: {ex.Message}", null); }
         }
 
+        /// <summary>Retrieves leads for a specific assigned client list via GET /clients/lists/{listId}/leads.</summary>
+        public async Task<(bool Success, string Message, ClientListLeadsData? Data)> GetClientListLeadsAsync(
+            int listId,
+            System.Threading.CancellationToken ct = default)
+        {
+            try
+            {
+                var response = await _httpClient.GetAsync($"clients/lists/{listId}/leads", ct);
+                var responseBody = await response.Content.ReadAsStringAsync(ct);
+                var result = JsonSerializer.Deserialize<ApiResponse<ClientListLeadsData>>(responseBody);
+                if (result == null) return (false, "Unable to parse server response.", null);
+                return (result.Success, result.Message, result.Data);
+            }
+            catch (OperationCanceledException) { return (false, "Operation cancelled by user.", null); }
+            catch (HttpRequestException) { return (false, "Cannot connect to server. Please ensure XAMPP Apache & MySQL are running.", null); }
+            catch (Exception ex) { return (false, $"Error fetching list leads: {ex.Message}", null); }
+        }
+
+        /// <summary>Removes an assigned client list and unassigns its leads via POST /clients/lists/delete.</summary>
+        public async Task<(bool Success, string Message)> DeleteClientListAsync(int listId)
+        {
+            try
+            {
+                var payload = new { id = listId };
+                var json = JsonSerializer.Serialize(payload);
+                var content = new StringContent(json, Encoding.UTF8, "application/json");
+                var response = await _httpClient.PostAsync("clients/lists/delete", content);
+                var responseBody = await response.Content.ReadAsStringAsync();
+                var result = JsonSerializer.Deserialize<ApiResponse<object>>(responseBody);
+                if (result == null) return (false, "Unable to parse server response.");
+                return (result.Success, result.Message);
+            }
+            catch (HttpRequestException) { return (false, "Cannot connect to server. Please ensure XAMPP Apache & MySQL are running."); }
+            catch (Exception ex) { return (false, $"Error deleting assigned list: {ex.Message}"); }
+        }
+
         /// <summary>Updates lead fields in real time via POST /leads/{id}.</summary>
         public async Task<(bool Success, string Message, LeadModel? UpdatedLead)> UpdateLeadAsync(int leadId, object payload)
         {

@@ -61,6 +61,25 @@ class ClientController
             $client['files'] = $files;
             $client['file_count'] = count($files);
 
+            // Assigned lead lists (List 01, List 02, etc.)
+            $stmtLists = $this->db->prepare("
+                SELECT cl.id, cl.client_id, cl.list_name, cl.created_at,
+                       COUNT(l.id) AS total_leads
+                FROM `client_lists` cl
+                LEFT JOIN `leads` l ON l.client_list_id = cl.id AND l.client_id = cl.client_id
+                WHERE cl.client_id = ?
+                GROUP BY cl.id, cl.client_id, cl.list_name, cl.created_at
+                ORDER BY cl.id ASC
+            ");
+            $stmtLists->execute([$clientId]);
+            $lists = $stmtLists->fetchAll();
+            foreach ($lists as &$lst) {
+                $lst['id'] = (int)$lst['id'];
+                $lst['client_id'] = (int)$lst['client_id'];
+                $lst['total_leads'] = (int)$lst['total_leads'];
+            }
+            $client['lists'] = $lists;
+
             // Total leads assigned to this client from centralized leads masterlist
             $stmtMasterCount = $this->db->prepare("SELECT COUNT(*) FROM `leads` WHERE `client_id` = ?");
             $stmtMasterCount->execute([$clientId]);
@@ -588,6 +607,105 @@ class ClientController
             'total'       => count($leads),
             'leads'       => $leads
         ], 'Client leads retrieved successfully');
+    }
+
+    /**
+     * GET /clients/lists/{id}/leads
+     *
+     * Retrieves all lead records belonging to a specific client assigned list.
+     */
+    public function listLeads(int $listId): void
+    {
+        if ($listId <= 0) {
+            Response::error('Invalid list ID.', 422);
+        }
+
+        $stmt = $this->db->prepare("
+            SELECT cl.id, cl.client_id, cl.list_name, cl.created_at,
+                   c.first_name, c.last_name
+            FROM `client_lists` cl
+            INNER JOIN `clients` c ON cl.client_id = c.id
+            WHERE cl.id = ?
+        ");
+        $stmt->execute([$listId]);
+        $list = $stmt->fetch();
+
+        if (!$list) {
+            Response::notFound('Assigned list not found.');
+        }
+
+        $stmtLeads = $this->db->prepare("
+            SELECT * FROM `leads`
+            WHERE `client_list_id` = ?
+            ORDER BY `id` ASC
+        ");
+        $stmtLeads->execute([$listId]);
+        $leads = $stmtLeads->fetchAll();
+
+        Response::success([
+            'list_id'     => (int)$list['id'],
+            'client_id'   => (int)$list['client_id'],
+            'client_name' => trim($list['first_name'] . ' ' . $list['last_name']),
+            'list_name'   => $list['list_name'],
+            'created_at'  => $list['created_at'],
+            'total'       => count($leads),
+            'leads'       => $leads
+        ], 'List leads retrieved successfully');
+    }
+
+    /**
+     * DELETE /clients/lists/{id} or POST /clients/lists/delete
+     *
+     * Removes an assigned list and unassigns its leads from the client (returning them to Unassigned in Masterlist).
+     */
+    public function deleteList(int $listId): void
+    {
+        if ($listId <= 0) {
+            Response::error('Invalid list ID.', 422);
+        }
+
+        $stmt = $this->db->prepare("
+            SELECT cl.id, cl.client_id, cl.list_name, c.first_name, c.last_name
+            FROM `client_lists` cl
+            INNER JOIN `clients` c ON cl.client_id = c.id
+            WHERE cl.id = ?
+        ");
+        $stmt->execute([$listId]);
+        $list = $stmt->fetch();
+
+        if (!$list) {
+            Response::notFound('Assigned list not found.');
+        }
+
+        $clientName = trim($list['first_name'] . ' ' . $list['last_name']);
+        $listName = $list['list_name'];
+
+        $this->db->beginTransaction();
+        try {
+            $upd = $this->db->prepare("UPDATE `leads` SET `client_id` = NULL, `client_list_id` = NULL WHERE `client_list_id` = ?");
+            $upd->execute([$listId]);
+            $unassignedCount = $upd->rowCount();
+
+            $del = $this->db->prepare("DELETE FROM `client_lists` WHERE `id` = ?");
+            $del->execute([$listId]);
+
+            $this->db->commit();
+
+            ActivityLogger::log(
+                'CLIENT_LIST_DELETE',
+                'Removed Assigned List',
+                "Removed '{$listName}' from client '{$clientName}' ({$unassignedCount} leads unassigned)"
+            );
+
+            Response::success([
+                'list_id'          => $listId,
+                'list_name'        => $listName,
+                'unassigned_count' => $unassignedCount
+            ], "List '{$listName}' removed and {$unassignedCount} lead(s) unassigned.");
+        } catch (Exception $e) {
+            $this->db->rollBack();
+            Response::serverError('Failed to remove assigned list: ' . $e->getMessage());
+        }
     }
 
     /**
